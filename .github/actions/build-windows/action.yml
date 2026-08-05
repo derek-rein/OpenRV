@@ -22,6 +22,10 @@ inputs:
   windows_qt6_archives:
     required: false
     default: 'd3dcompiler_47 opengl32sw qtbase qtdeclarative qtsvg qttools qttranslations'
+  cache-qt:
+    required: false
+    # Cache prebuilt Qt from aqt (jurplel/install-qt-action). Huge win vs re-download.
+    default: 'true'
 
 runs:
   using: "composite"
@@ -135,7 +139,7 @@ runs:
       run: mkdir -p /c/qt
       shell: msys2 {0}
 
-    - name: Install Qt ${{ inputs.qt-version }}
+    - name: Install Qt ${{ inputs.qt-version }} (prebuilt via aqt)
       uses: jurplel/install-qt-action@v4
       with:
         version: '${{ inputs.qt-version }}'
@@ -146,9 +150,10 @@ runs:
         install-deps: 'false'
         modules: ${{ inputs.windows_qt6_modules }}
         archives: ${{ inputs.windows_qt6_archives }}
-        cache: false
+        # Cache prebuilt Qt binaries — avoids re-downloading qtwebengine every run.
+        cache: ${{ inputs.cache-qt == 'true' }}
+        cache-key-prefix: 'qt-windows-${{ inputs.qt-version }}'
         setup-python: 'false'
-        tools: 'tools_qtcreator'
         set-env: 'true'
         tools-only: 'false'
         aqtversion: '==3.2.*'

@@ -22,6 +22,10 @@ inputs:
   rocky_qt6_archives:
     required: false
     default: 'icu qtbase qtdeclarative qtsvg qttools qttranslations qtwayland'
+  cache-qt:
+    required: false
+    # Cache prebuilt Qt from aqt (jurplel/install-qt-action). Huge win vs re-download.
+    default: 'true'
 
 runs:
   using: "composite"
@@ -204,7 +208,7 @@ runs:
       run: mkdir -p "${{ github.workspace }}/deps"
       shell: bash
 
-    - name: Install Qt ${{ inputs.qt-version }}
+    - name: Install Qt ${{ inputs.qt-version }} (prebuilt via aqt)
       uses: jurplel/install-qt-action@v4
       with:
         version: '${{ inputs.qt-version }}'
@@ -215,9 +219,10 @@ runs:
         install-deps: 'false'
         modules: ${{ inputs.rocky_qt6_modules }}
         archives: ${{ inputs.rocky_qt6_archives }}
-        cache: false
+        # Cache prebuilt Qt binaries — avoids re-downloading qtwebengine every run.
+        cache: ${{ inputs.cache-qt == 'true' }}
+        cache-key-prefix: 'qt-linux-${{ inputs.qt-version }}'
         setup-python: 'false'
-        tools: 'tools_qtcreator'
         set-env: 'true'
         tools-only: 'false'
         aqtversion: '==3.2.*'

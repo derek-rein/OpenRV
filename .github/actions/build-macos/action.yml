@@ -21,10 +21,15 @@ inputs:
     default: 'false'
   macos_qt6_modules:
     required: false
+    # Qt 6 clang_64 is a universal (x86_64 + arm64) prebuilt — no source build needed.
     default: 'debug_info qt3d qt5compat qtcharts qtconnectivity qtdatavis3d qtgrpc qthttpserver qtimageformats qtlanguageserver qtlocation qtlottie qtmultimedia qtnetworkauth qtpdf qtpositioning qtquick3d qtquick3dphysics qtquickeffectmaker qtquicktimeline qtremoteobjects qtscxml qtsensors qtserialbus qtserialport qtshadertools qtspeech qtvirtualkeyboard qtwebchannel qtwebengine qtwebsockets qtwebview'
   macos_qt6_archives:
     required: false
     default: 'qtbase qtdeclarative qtsvg qttools qttranslations'
+  cache-qt:
+    required: false
+    # Cache prebuilt Qt from aqt (jurplel/install-qt-action). Huge win vs re-download.
+    default: 'true'
 
 runs:
   using: "composite"
@@ -65,21 +70,22 @@ runs:
       run: mkdir -p "${{ github.workspace }}/deps"
       shell: bash
 
-    - name: Install Qt ${{ inputs.qt-version }}
+    - name: Install Qt ${{ inputs.qt-version }} (prebuilt via aqt)
       uses: jurplel/install-qt-action@v4
       with:
         version: '${{ inputs.qt-version }}'
         host: 'mac'
         target: 'desktop'
-        # clang_64 contains both x86_64 and arm64 for Qt 6.
+        # Qt 6 clang_64 is a universal binary (x86_64 + arm64) — no source build.
         arch: 'clang_64'
         dir: "${{ github.workspace }}/deps"
         install-deps: 'false'
         modules: ${{ inputs.macos_qt6_modules }}
         archives: ${{ inputs.macos_qt6_archives }}
-        cache: false
+        # Cache prebuilt Qt binaries — avoids re-downloading qtwebengine every run.
+        cache: ${{ inputs.cache-qt == 'true' }}
+        cache-key-prefix: 'qt-macos-${{ inputs.qt-version }}'
         setup-python: true
-        tools: 'tools_qtcreator'
         set-env: 'true'
         tools-only: 'false'
         aqtversion: '==3.2.*'
