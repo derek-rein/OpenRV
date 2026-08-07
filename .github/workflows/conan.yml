@@ -30,8 +30,10 @@ env:
 
 jobs:
   rocky-linux:
-    # Schedule only on ASWF; PRs / manual dispatch still allowed everywhere.
-    if: github.repository_owner == 'AcademySoftwareFoundation' || github.event_name != 'schedule'
+    # Prebuilt Multi-platform Build packages do not use Conan. Keep the matrix
+    # on ASWF (or manual workflow_dispatch on a fork that is actually working
+    # on Conan packaging).
+    if: github.repository_owner == 'AcademySoftwareFoundation' || github.event_name == 'workflow_dispatch'
     name: 'Rocky Linux ${{ matrix.rocky-version }} ${{ matrix.vfx-platform }}
       <qt=${{ matrix.qt-version }},
        python=${{ matrix.python-version }},
@@ -389,7 +391,7 @@ jobs:
           cmake --install build/Release --prefix $(pwd)/_install --config ${{ matrix.build-type }}
 
   macos:
-    if: github.repository_owner == 'AcademySoftwareFoundation' || github.event_name != 'schedule'
+    if: github.repository_owner == 'AcademySoftwareFoundation' || github.event_name == 'workflow_dispatch'
     name: '${{ matrix.os }} ${{ matrix.arch-type }} ${{ matrix.vfx-platform }}
       <qt=${{ matrix.qt-version }},
        python=${{ matrix.python-version }},
@@ -559,7 +561,7 @@ jobs:
           cmake --install build/Release --prefix $(pwd)/_install --config ${{ matrix.build-type }}
 
   windows:
-    if: github.repository_owner == 'AcademySoftwareFoundation' || github.event_name != 'schedule'
+    if: github.repository_owner == 'AcademySoftwareFoundation' || github.event_name == 'workflow_dispatch'
     name: 'Windows ${{ matrix.vfx-platform }}
       <${{ matrix.os }}
        msvc=${{ matrix.msvc-component }},
