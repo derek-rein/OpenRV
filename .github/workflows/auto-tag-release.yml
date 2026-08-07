@@ -1,0 +1,102 @@
+# After a PR merges to main: if CMakeLists version X.Y.Z has no tag vX.Y.Z yet,
+# create and push the tag, then *explicitly* start Multi-platform Build.
+#
+# Why workflow_dispatch (not “tag push alone”):
+#   Tags created with the default GITHUB_TOKEN do **not** start other workflows
+#   (GitHub recursion guard). So auto-tag must call `gh workflow run` after
+#   pushing the tag. That *does* work with GITHUB_TOKEN.
+#
+# Mirrors derek-rein/exr-converter auto-tag-release.yml, adapted for OpenRV:
+#   version source = CMakeLists.txt (RV_MAJOR/MINOR/REVISION)
+#   build workflow  = Multi-platform Build (build.yml)
+#
+# Also recovers: if the tag exists but no GitHub Release was published yet,
+# re-trigger Multi-platform Build (e.g. after a failed publish).
+
+name: Auto-tag release
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: auto-tag-release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  actions: write # required to `gh workflow run` Multi-platform Build
+
+jobs:
+  tag-and-dispatch:
+    runs-on: ubuntu-latest
+    # Skip merge commits from the release machinery itself (if any)
+    if: >-
+      !startsWith(github.event.head_commit.message, 'chore(release):') &&
+      !startsWith(github.event.head_commit.message, 'chore: release')
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Tag if needed and trigger Multi-platform Build
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          VERSION=$(python3 scripts/apply_release_version.py --print)
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Refusing to tag non-semver version: $VERSION"
+            exit 1
+          fi
+          TAG="v${VERSION}"
+          echo "version=${VERSION} tag=${TAG}"
+
+          TAG_EXISTS=false
+          if git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null 2>&1; then
+            TAG_EXISTS=true
+          elif git ls-remote --exit-code --tags origin "refs/tags/${TAG}" >/dev/null 2>&1; then
+            TAG_EXISTS=true
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if [ "$TAG_EXISTS" = false ]; then
+            git tag -a "${TAG}" -m "release: ${VERSION}"
+            git push origin "refs/tags/${TAG}"
+            echo "Created and pushed ${TAG} → ${GITHUB_SHA}"
+          else
+            echo "Tag ${TAG} already exists"
+          fi
+
+          # Publish if there is no GitHub Release yet (new tag or previous miss).
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            echo "GitHub Release ${TAG} already exists — nothing to dispatch."
+            exit 0
+          fi
+
+          # If the tag exists but no release was published (failed first attempt,
+          # packaging fix on main, etc.), retarget the tag at this main tip so
+          # the build uses the current workflow + scripts.
+          if [ "$TAG_EXISTS" = true ]; then
+            echo "Retargeting unreleased ${TAG} → ${GITHUB_SHA}"
+            git tag -f -a "${TAG}" -m "release: ${VERSION}"
+            git push -f origin "refs/tags/${TAG}"
+          fi
+
+          echo "No GitHub Release for ${TAG} — dispatching Multi-platform Build"
+          # workflow_dispatch IS allowed to start new runs with GITHUB_TOKEN
+          # (unlike events from a GITHUB_TOKEN tag push).
+          # Use --ref main so we get the latest build.yml. Checkout uses the
+          # tag (now pointing at this merge) via inputs.tag.
+          gh workflow run "Multi-platform Build" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --ref main \
+            -f "tag=${TAG}" \
+            -f "source_ref=${TAG}" \
+            -f "platforms=all" \
+            -f "skip_deps_cache=false"
+          echo "Dispatched Multi-platform Build for ${TAG}"
