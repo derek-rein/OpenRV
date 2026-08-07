@@ -53,7 +53,9 @@ def read_version() -> str:
 def apply(version: str, dry_run: bool = False) -> None:
     major, minor, rev = parse_version(version)
     text = CMAKE.read_text(encoding="utf-8")
-    for key, val in zip(KEYS, (major, minor, rev), strict=True):
+    # Note: no zip(..., strict=True) — Rocky CI containers ship system
+    # Python 3.9, which rejects the strict= keyword (3.10+).
+    for key, val in zip(KEYS, (major, minor, rev)):
         text, n = re.subn(
             rf'(SET\({key}\s+")[^"]*(")',
             rf"\g<1>{val}\2",

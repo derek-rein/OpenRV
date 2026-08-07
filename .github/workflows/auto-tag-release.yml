@@ -61,12 +61,13 @@ jobs:
             TAG_EXISTS=true
           fi
 
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
           if [ "$TAG_EXISTS" = false ]; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git tag -a "${TAG}" -m "release: ${VERSION}"
             git push origin "refs/tags/${TAG}"
-            echo "Created and pushed ${TAG}"
+            echo "Created and pushed ${TAG} → ${GITHUB_SHA}"
           else
             echo "Tag ${TAG} already exists"
           fi
@@ -77,15 +78,25 @@ jobs:
             exit 0
           fi
 
+          # If the tag exists but no release was published (failed first attempt,
+          # packaging fix on main, etc.), retarget the tag at this main tip so
+          # the build uses the current workflow + scripts.
+          if [ "$TAG_EXISTS" = true ]; then
+            echo "Retargeting unreleased ${TAG} → ${GITHUB_SHA}"
+            git tag -f -a "${TAG}" -m "release: ${VERSION}"
+            git push -f origin "refs/tags/${TAG}"
+          fi
+
           echo "No GitHub Release for ${TAG} — dispatching Multi-platform Build"
           # workflow_dispatch IS allowed to start new runs with GITHUB_TOKEN
           # (unlike events from a GITHUB_TOKEN tag push).
-          # Use --ref main so we get the latest build.yml (with workflow_dispatch
-          # + tag input). The build checks out the tag via inputs.tag / source_ref.
+          # Use --ref main so we get the latest build.yml. Checkout uses the
+          # tag (now pointing at this merge) via inputs.tag.
           gh workflow run "Multi-platform Build" \
             --repo "${GITHUB_REPOSITORY}" \
             --ref main \
             -f "tag=${TAG}" \
+            -f "source_ref=${TAG}" \
             -f "platforms=all" \
             -f "skip_deps_cache=false"
           echo "Dispatched Multi-platform Build for ${TAG}"
