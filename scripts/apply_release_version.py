@@ -68,7 +68,9 @@ def apply(version: str, dry_run: bool = False) -> None:
         print(f"dry-run: would set {major}.{minor}.{rev}")
         return
     CMAKE.write_text(text, encoding="utf-8")
-    print(f"Patched {CMAKE.name} → {major}.{minor}.{rev}")
+    # ASCII arrow only — Windows Actions runners use a legacy code page and
+    # crash on Unicode (UnicodeEncodeError for "→").
+    print(f"Patched {CMAKE.name} -> {major}.{minor}.{rev}")
 
 
 def main() -> None:
