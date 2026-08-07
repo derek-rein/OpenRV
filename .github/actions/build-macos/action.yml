@@ -51,10 +51,26 @@ runs:
         sudo rm -rf /Applications/Xcode_15.1.app
         sudo rm -rf /Applications/Xcode_15.0.1.app
         sudo rm -rf /Users/runner/Library/Android
+        # Extra free space / caches — OpenRV + Qt + deps are large on the 14GB disk.
+        sudo rm -rf /Users/runner/Library/Developer/CoreSimulator || true
+        sudo rm -rf /Users/runner/Library/Caches/* || true
+        rm -rf ~/Library/Developer/Xcode/DerivedData/* || true
       shell: bash
 
     - name: Display disk space
       run: df -h /
+      shell: bash
+
+    - name: Resolve build job count
+      # macos-14 GHA runners are typically 3 cores with limited RAM. Prior release
+      # run died with: "The hosted runner lost communication with the server"
+      # during MuQt6 compile (OOM / agent heartbeat starvation). Cap jobs at 2
+      # and never use cmake --build -v (log flood kills the runner agent).
+      run: |
+        CORES=$(python3 -c 'import os; print(os.cpu_count() or 2)')
+        if [ "$CORES" -gt 2 ]; then JOBS=2; else JOBS=$CORES; fi
+        echo "RV_BUILD_JOBS=${JOBS}" >> "$GITHUB_ENV"
+        echo "Using ${JOBS} parallel build jobs (detected cores=${CORES})"
       shell: bash
 
     - name: Add repository as safe directory
@@ -133,7 +149,9 @@ runs:
       shell: bash
 
     - name: Check if the dependencies changed
-      if: inputs.build-type == 'Release'
+      # Only meaningful on PRs (compares against base). On tag / workflow_dispatch
+      # the filter mis-detects changes and would skip the deps cache forever.
+      if: inputs.build-type == 'Release' && github.event_name == 'pull_request'
       uses: dorny/paths-filter@v3
       id: changes-in-deps
       with:
@@ -142,8 +160,11 @@ runs:
             - 'cmake/**'
 
     - name: Restore some dependencies
-      # Restore only if there are no changes under cmake folder and Release build.
-      if: inputs.skip_deps_cache == 'false' && steps.changes-in-deps.outputs.dependencies == 'false' && inputs.build-type == 'Release'
+      # Release / tag / dispatch: always try cache. PR: only if cmake/** unchanged.
+      if: >-
+        inputs.skip_deps_cache == 'false' &&
+        inputs.build-type == 'Release' &&
+        (github.event_name != 'pull_request' || steps.changes-in-deps.outputs.dependencies == 'false')
       id: cmake-dependencies
       uses: actions/cache/restore@v4
       with:
@@ -175,16 +196,19 @@ runs:
     - name: Build OpenRV dependencies
       if: steps.cmake-dependencies.outputs.cache-hit != 'true'
       run: |
-        cmake --build _build --config ${{ inputs.build-type }} --target dependencies --parallel=$(python -c 'import os; print(os.cpu_count())') -v
+        # No -v: verbose ninja floods the GHA log agent and contributes to
+        # "hosted runner lost communication" on long macOS builds.
+        cmake --build _build --config ${{ inputs.build-type }} --target dependencies --parallel="${RV_BUILD_JOBS}"
         ls -al _build
       shell: bash
 
     - name: Build OpenRV main executable
-      run: cmake --build _build --config ${{ inputs.build-type }} --target main_executable --parallel=$(python -c 'import os; print(os.cpu_count())') -v
+      run: |
+        cmake --build _build --config ${{ inputs.build-type }} --target main_executable --parallel="${RV_BUILD_JOBS}"
       shell: bash
 
     - name: Tests
-      run: ctest --test-dir _build -C ${{ inputs.build-type }} --extra-verbose
+      run: ctest --test-dir _build -C ${{ inputs.build-type }} --output-on-failure
       shell: bash
 
     - name: Install OpenRV
@@ -192,8 +216,12 @@ runs:
       shell: bash
 
     - name: Save dependencies cache
-      # Only save on push/schedule/workflow_dispatch so PRs use cache from main branch.
-      if: inputs.skip_deps_cache == 'false' && steps.changes-in-deps.outputs.dependencies == 'false' && inputs.build-type == 'Release' && github.event_name != 'pull_request'
+      # Save on non-PR Release runs when we actually built deps (not a restore hit).
+      if: >-
+        inputs.skip_deps_cache == 'false' &&
+        inputs.build-type == 'Release' &&
+        github.event_name != 'pull_request' &&
+        steps.cmake-dependencies.outputs.cache-hit != 'true'
       uses: actions/cache/save@v4
       with:
         path: |
