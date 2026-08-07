@@ -33,17 +33,45 @@ Builds use VFX Platform **CY2025** (Qt 6.5.3, Python 3.11). Unpack the archive a
 
 ### Publishing a release
 
-Tags are plain semver: **`vX.Y.Z`** (example: `v4.0.2`).
+Same shape as [exr-converter](https://github.com/derek-rein/exr-converter): **PR → checks → merge → auto-tag → multi-platform build → GitHub Release**.
+
+Tags are plain semver: **`vX.Y.Z`** (example: `v4.0.2`). Version source of truth is `CMakeLists.txt` (`RV_MAJOR_VERSION` / `RV_MINOR_VERSION` / `RV_REVISION_NUMBER`).
 
 ```bash
-# From a commit you want to ship:
-git tag -a vX.Y.Z -m "release: X.Y.Z"
-git push origin vX.Y.Z
+git checkout main && git pull
+git checkout -b release/X.Y.Z
+
+# Bump CMakeLists point version (or edit the three RV_* SETs by hand)
+python3 scripts/apply_release_version.py X.Y.Z
+git add CMakeLists.txt
+git commit -m "release: X.Y.Z"
+
+git push -u origin HEAD
+gh pr create --base main --title "release: X.Y.Z" --body "Ship Open RV X.Y.Z multi-platform packages."
+
+# Wait for PR Check to go green, then approve + merge
+gh pr checks
+gh pr merge --merge   # or --squash
 ```
 
-That starts **Multi-platform Build**, which packages stable asset names and publishes a GitHub Release (so the table above works). You can also run the workflow manually from the Actions tab and pass a `tag` input (e.g. `v4.0.2`).
+After merge:
 
-Pushes to `ci/**` branches still build and upload CI artifacts only (no GitHub Release).
+1. **Auto-tag release** reads the version from `CMakeLists.txt`, creates `vX.Y.Z` if missing, and dispatches **Multi-platform Build** (needed because `GITHUB_TOKEN` tag pushes do not start other workflows).
+2. **Multi-platform Build** builds Linux / macOS ARM / Windows, then publishes a GitHub Release with the stable asset names above.
+
+Manual fallbacks:
+
+```bash
+# Human/PAT tag push (does start Multi-platform Build):
+git tag -a vX.Y.Z -m "release: X.Y.Z" && git push origin vX.Y.Z
+
+# Or Actions UI / CLI dispatch:
+gh workflow run "Multi-platform Build" --ref main -f tag=vX.Y.Z -f platforms=all
+```
+
+Pushes to `ci/**` branches still build and upload CI artifacts only (no GitHub Release) — useful for validating packaging before opening the release PR.
+
+**Note:** The scheduled **Conan-OpenRV** workflow is ASWF experimental packaging. Prebuilt packages from this fork do **not** use Conan; the schedule is no-op on non-ASWF forks.
 
 ## Cloning the repository
 

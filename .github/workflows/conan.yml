@@ -1,15 +1,23 @@
 #
+# Conan packaging path (ASWF experimental). Not used by Multi-platform Build
+# release binaries (those use aqt + traditional CMake deps).
+#
+# Daily schedule is ASWF-only — forks that only ship prebuilt packages should
+# not burn Actions minutes on this matrix.
 name: Conan-OpenRV
 
 on:
   schedule:
-    # Midnight build every day
+    # Midnight build every day (no-op on non-ASWF forks; see job guards below)
     - cron: "0 0 * * *"
   pull_request:
     paths:
       - '.github/workflows/conan.yml'
       - 'openrvcore-conanfile.py'
       - 'cmake/dependencies/**'
+      - 'conan/**'
+      - 'conanfile.py'
+  workflow_dispatch:
 
 env:
   SKIP_DEPS_CACHE: 'false'
@@ -22,7 +30,8 @@ env:
 
 jobs:
   rocky-linux:
-    #if : ${{ github.repository_owner == 'AcademySoftwareFoundation' }}
+    # Schedule only on ASWF; PRs / manual dispatch still allowed everywhere.
+    if: github.repository_owner == 'AcademySoftwareFoundation' || github.event_name != 'schedule'
     name: 'Rocky Linux ${{ matrix.rocky-version }} ${{ matrix.vfx-platform }}
       <qt=${{ matrix.qt-version }},
        python=${{ matrix.python-version }},
@@ -380,7 +389,7 @@ jobs:
           cmake --install build/Release --prefix $(pwd)/_install --config ${{ matrix.build-type }}
 
   macos:
-    #if : ${{ github.repository_owner == 'AcademySoftwareFoundation' }}
+    if: github.repository_owner == 'AcademySoftwareFoundation' || github.event_name != 'schedule'
     name: '${{ matrix.os }} ${{ matrix.arch-type }} ${{ matrix.vfx-platform }}
       <qt=${{ matrix.qt-version }},
        python=${{ matrix.python-version }},
@@ -550,7 +559,7 @@ jobs:
           cmake --install build/Release --prefix $(pwd)/_install --config ${{ matrix.build-type }}
 
   windows:
-    #if : ${{ github.repository_owner == 'AcademySoftwareFoundation' }}
+    if: github.repository_owner == 'AcademySoftwareFoundation' || github.event_name != 'schedule'
     name: 'Windows ${{ matrix.vfx-platform }}
       <${{ matrix.os }}
        msvc=${{ matrix.msvc-component }},

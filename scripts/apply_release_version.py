@@ -35,6 +35,21 @@ def parse_version(s: str) -> tuple[str, str, str]:
     return parts[0], parts[1], parts[2]
 
 
+def read_version() -> str:
+    """Return X.Y.Z from CMakeLists.txt RV_* version SETs."""
+    text = CMAKE.read_text(encoding="utf-8")
+    vals: list[str] = []
+    for key in KEYS:
+        m = re.search(rf'SET\({key}\s+"([^"]*)"', text)
+        if not m:
+            raise SystemExit(f"failed to read {key} from {CMAKE}")
+        vals.append(m.group(1))
+    major, minor, rev = vals
+    if not all(p.isdigit() for p in vals):
+        raise SystemExit(f"non-numeric version in {CMAKE}: {'.'.join(vals)}")
+    return f"{major}.{minor}.{rev}"
+
+
 def apply(version: str, dry_run: bool = False) -> None:
     major, minor, rev = parse_version(version)
     text = CMAKE.read_text(encoding="utf-8")
@@ -66,13 +81,21 @@ def main() -> None:
         dest="from_tag",
         help="same as positional version (accepts v-prefix)",
     )
+    p.add_argument(
+        "--print",
+        action="store_true",
+        help="print current X.Y.Z from CMakeLists.txt and exit",
+    )
     p.add_argument("--dry-run", action="store_true")
     args = p.parse_args()
-    version = args.from_tag or args.version
-    if not version:
-        p.error("version or --from-tag required")
     if not CMAKE.is_file():
         raise SystemExit(f"missing {CMAKE}")
+    if args.print:
+        print(read_version())
+        return
+    version = args.from_tag or args.version
+    if not version:
+        p.error("version, --from-tag, or --print required")
     apply(version, dry_run=args.dry_run)
 
 

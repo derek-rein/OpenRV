@@ -2,9 +2,14 @@
 # Uses prebuilt Qt via jurplel/install-qt-action (aqt) with Actions cache.
 #
 # Triggers:
-#   1. push to ci/**          — build + upload CI artifacts only
-#   2. push of tag v*         — build + publish GitHub Release (stable asset names)
-#   3. workflow_dispatch      — optional tag input publishes a Release
+#   1. push to ci/**          — build + upload CI artifacts only (no GitHub Release)
+#   2. push of tag v*         — build + publish GitHub Release (human/PAT tag push)
+#   3. workflow_dispatch      — Auto-tag release uses this after merge to main
+#                               (GITHUB_TOKEN tag pushes do NOT start workflows)
+#
+# Release flow (mirrors exr-converter):
+#   version bump PR → main → merge → Auto-tag release → this workflow (tag=vX.Y.Z)
+#   → GitHub Release with stable asset names
 #
 # Stable download URLs (do not put the version in the filename):
 #   https://github.com/<owner>/<repo>/releases/latest/download/openrv-linux-x86_64.tar.gz
@@ -21,7 +26,7 @@ on:
     inputs:
       skip_deps_cache:
         description: 'Skip dependencies caching'
-        required: true
+        required: false
         default: 'false'
         type: choice
         options:
@@ -29,7 +34,7 @@ on:
           - 'true'
       platforms:
         description: 'Which platforms to build'
-        required: true
+        required: false
         default: 'all'
         type: choice
         options:
@@ -43,7 +48,7 @@ on:
         type: string
         default: ''
       source_ref:
-        description: 'Git ref to build (default: the branch/tag selected in the Actions UI). Set explicitly to rebuild an older commit/tag.'
+        description: 'Git ref to build (default: same as tag when set, else the branch selected in the UI).'
         required: false
         type: string
         default: ''
@@ -64,8 +69,8 @@ permissions:
 env:
   # Published version / GitHub Release name (empty when CI-only)
   RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || (startsWith(github.ref, 'refs/tags/v') && github.ref_name || '') }}
-  # Code to build: dispatch can override; otherwise the event ref (branch or tag)
-  RELEASE_REF: ${{ github.event_name == 'workflow_dispatch' && (inputs.source_ref != '' && inputs.source_ref || github.ref_name) || github.ref_name }}
+  # Code to build: prefer explicit source_ref, else the tag, else the event ref
+  RELEASE_REF: ${{ github.event_name == 'workflow_dispatch' && (inputs.source_ref != '' && inputs.source_ref || (inputs.tag != '' && inputs.tag || github.ref_name)) || github.ref_name }}
   # Stable asset basenames (no version — required for /releases/latest/download/)
   ARTIFACT_LINUX: openrv-linux-x86_64
   ARTIFACT_MACOS: openrv-macos-arm64
