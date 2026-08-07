@@ -316,13 +316,30 @@ jobs:
           # Fail if nothing to publish
           test -n "$(find artifacts -type f | head -1)"
 
+      # GitHub's create-release API only accepts a branch name or commit SHA for
+      # target_commitish — not a tag name. Auto-tag dispatches with source_ref=vX.Y.Z
+      # which previously produced 422 "invalid field target_commitish" and left
+      # Releases empty even after all platform builds succeeded.
+      - name: Resolve target commitish
+        id: target
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_REF: ${{ needs.meta.outputs.release_ref }}
+        run: |
+          set -euo pipefail
+          # Resolve branch/tag/sha → commit SHA (API accepts commits/…)
+          SHA=$(gh api "repos/${GITHUB_REPOSITORY}/commits/${RELEASE_REF}" --jq .sha)
+          echo "sha=${SHA}" >> "$GITHUB_OUTPUT"
+          echo "Resolved target_commitish ${RELEASE_REF} → ${SHA}"
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2.5.0
         with:
           tag_name: ${{ needs.meta.outputs.release_tag }}
-          # On workflow_dispatch, create/point the tag at the ref we built.
-          # On tag push, leave unset so the existing tag's commit is used.
-          target_commitish: ${{ github.event_name == 'workflow_dispatch' && needs.meta.outputs.release_ref || '' }}
+          # Tag push: leave empty (existing tag's commit). workflow_dispatch: commit SHA.
+          target_commitish: ${{ github.event_name == 'workflow_dispatch' && steps.target.outputs.sha || '' }}
           name: "Open RV ${{ needs.meta.outputs.release_tag }}"
           generate_release_notes: true
           files: artifacts/*
