@@ -1,15 +1,17 @@
 # Multi-platform Release builds for Windows, macOS ARM, and Linux.
 # Uses prebuilt Qt via jurplel/install-qt-action (aqt) with Actions cache.
 #
-# Triggers:
-#   1. push to ci/**          — build + upload CI artifacts only (no GitHub Release)
-#   2. push of tag v*         — build + publish GitHub Release (human/PAT tag push)
-#   3. workflow_dispatch      — Auto-tag release uses this after merge to main
+# Triggers (NEVER on PR / feature-branch push — those are approve-then-build):
+#   1. push of tag v*         — human/PAT tag push → build + GitHub Release
+#   2. workflow_dispatch      — Auto-tag release after merge to main
 #                               (GITHUB_TOKEN tag pushes do NOT start workflows)
 #
 # Release flow (mirrors exr-converter):
-#   version bump PR → main → merge → Auto-tag release → this workflow (tag=vX.Y.Z)
+#   version bump PR → light PR Check only → merge → Auto-tag → this workflow
 #   → GitHub Release with stable asset names
+#
+# Manual packaging smoke test (no PR noise): Actions → Multi-platform Build → Run
+# with empty tag (artifacts only) or a tag input (publish).
 #
 # Stable download URLs (do not put the version in the filename):
 #   https://github.com/<owner>/<repo>/releases/latest/download/openrv-linux-x86_64.tar.gz
@@ -53,9 +55,9 @@ on:
         type: string
         default: ''
 
+  # Tags only — do not run on branch pushes (those show up as pre-merge PR checks
+  # and burn ~2h × 3 OS before anyone has approved the PR).
   push:
-    branches:
-      - ci/**
     tags:
       - 'v*'
 

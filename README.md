@@ -69,7 +69,7 @@ git tag -a vX.Y.Z -m "release: X.Y.Z" && git push origin vX.Y.Z
 gh workflow run "Multi-platform Build" --ref main -f tag=vX.Y.Z -f platforms=all
 ```
 
-Pushes to `ci/**` branches still build and upload CI artifacts only (no GitHub Release) — useful for validating packaging before opening the release PR.
+Full multi-platform builds run **only after merge** (or manual Actions dispatch / human tag push) — never on the PR itself. The PR only needs the light **PR Check** gate.
 
 **Note:** The scheduled **Conan-OpenRV** workflow is ASWF experimental packaging. Prebuilt packages from this fork do **not** use Conan; the schedule is no-op on non-ASWF forks.
 
