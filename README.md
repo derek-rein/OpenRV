@@ -8,6 +8,7 @@
 ![Supported Versions](https://img.shields.io/badge/python-3.11-blue)
 [![Supported VFX Platform Versions](https://img.shields.io/badge/vfx%20platform-2025-lightgrey.svg)](http://www.vfxplatform.com/)
 [![docs](https://readthedocs.org/projects/aswf-openrv/badge/?version=latest)](https://aswf-openrv.readthedocs.io/en/latest)
+[![Latest release](https://img.shields.io/github/v/release/derek-rein/OpenRV?label=latest)](https://github.com/derek-rein/OpenRV/releases)
 
 ## Overview
 
@@ -15,6 +16,34 @@ Open RV is an image and sequence viewer for VFX and animation artists.
 Open RV is high-performant, hardware accelerated, and pipeline-friendly.
 
 [Open RV Documentation on Read the Docs](https://aswf-openrv.readthedocs.io/en/latest/)
+
+## Downloads
+
+Prebuilt **Release** packages from this fork ([derek-rein/OpenRV](https://github.com/derek-rein/OpenRV)). Asset names are stable so these links always point at the latest published release:
+
+| Platform | Download |
+|----------|----------|
+| Linux x86_64 | [**tar.gz**](https://github.com/derek-rein/OpenRV/releases/latest/download/openrv-linux-x86_64.tar.gz) |
+| macOS Apple Silicon | [**tar.gz**](https://github.com/derek-rein/OpenRV/releases/latest/download/openrv-macos-arm64.tar.gz) |
+| Windows x64 | [**zip**](https://github.com/derek-rein/OpenRV/releases/latest/download/openrv-windows-x86_64.zip) |
+
+All releases: [github.com/derek-rein/OpenRV/releases](https://github.com/derek-rein/OpenRV/releases)
+
+Builds use VFX Platform **CY2025** (Qt 6.5.3, Python 3.11). Unpack the archive and run Open RV from the install tree. For source builds and full docs, see upstream [AcademySoftwareFoundation/OpenRV](https://github.com/AcademySoftwareFoundation/OpenRV).
+
+### Publishing a release
+
+Tags are plain semver: **`vX.Y.Z`** (example: `v4.0.2`).
+
+```bash
+# From a commit you want to ship:
+git tag -a vX.Y.Z -m "release: X.Y.Z"
+git push origin vX.Y.Z
+```
+
+That starts **Multi-platform Build**, which packages stable asset names and publishes a GitHub Release (so the table above works). You can also run the workflow manually from the Actions tab and pass a `tag` input (e.g. `v4.0.2`).
+
+Pushes to `ci/**` branches still build and upload CI artifacts only (no GitHub Release).
 
 ## Cloning the repository
 

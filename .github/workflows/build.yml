@@ -1,13 +1,22 @@
 # Multi-platform Release builds for Windows, macOS ARM, and Linux.
 # Uses prebuilt Qt via jurplel/install-qt-action (aqt) with Actions cache.
 #
-# Runs on this fork without the AcademySoftwareFoundation owner gate used by ci.yml.
-# Trigger: workflow_dispatch (Actions tab) or push to a ci/** branch.
+# Triggers:
+#   1. push to ci/**          — build + upload CI artifacts only
+#   2. push of tag v*         — build + publish GitHub Release (stable asset names)
+#   3. workflow_dispatch      — optional tag input publishes a Release
+#
+# Stable download URLs (do not put the version in the filename):
+#   https://github.com/<owner>/<repo>/releases/latest/download/openrv-linux-x86_64.tar.gz
+#   https://github.com/<owner>/<repo>/releases/latest/download/openrv-macos-arm64.tar.gz
+#   https://github.com/<owner>/<repo>/releases/latest/download/openrv-windows-x86_64.zip
+#
+# Point versions: tags are plain semver, e.g. v4.0.2. The tag is the published
+# version; CMakeLists.txt is patched for that build so the binary reports it.
 
 name: Multi-platform Build
 
 on:
-  # Manual run from the Actions tab (pick platforms / skip cache).
   workflow_dispatch:
     inputs:
       skip_deps_cache:
@@ -28,18 +37,77 @@ on:
           - linux
           - macos
           - windows
+      tag:
+        description: 'Release tag (e.g. v4.0.2). Empty = CI artifacts only, no GitHub Release.'
+        required: false
+        type: string
+        default: ''
+      source_ref:
+        description: 'Git ref to build (default: the branch/tag selected in the Actions UI). Set explicitly to rebuild an older commit/tag.'
+        required: false
+        type: string
+        default: ''
 
-  # Auto-build when pushing CI branches (keeps main free of multi-hour runs).
   push:
     branches:
       - ci/**
+    tags:
+      - 'v*'
 
 concurrency:
-  group: multi-platform-build-${{ github.ref }}
+  group: multi-platform-build-${{ github.workflow }}-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && inputs.tag || '' }}
   cancel-in-progress: true
 
+permissions:
+  contents: write
+
+env:
+  # Published version / GitHub Release name (empty when CI-only)
+  RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || (startsWith(github.ref, 'refs/tags/v') && github.ref_name || '') }}
+  # Code to build: dispatch can override; otherwise the event ref (branch or tag)
+  RELEASE_REF: ${{ github.event_name == 'workflow_dispatch' && (inputs.source_ref != '' && inputs.source_ref || github.ref_name) || github.ref_name }}
+  # Stable asset basenames (no version — required for /releases/latest/download/)
+  ARTIFACT_LINUX: openrv-linux-x86_64
+  ARTIFACT_MACOS: openrv-macos-arm64
+  ARTIFACT_WINDOWS: openrv-windows-x86_64
+
 jobs:
+  # ── Resolve whether this run publishes a GitHub Release ───────────────────
+  meta:
+    name: Resolve release meta
+    runs-on: ubuntu-latest
+    outputs:
+      release_tag: ${{ steps.resolve.outputs.release_tag }}
+      release_version: ${{ steps.resolve.outputs.release_version }}
+      publish_release: ${{ steps.resolve.outputs.publish_release }}
+      release_ref: ${{ steps.resolve.outputs.release_ref }}
+    steps:
+      - name: Resolve tag / version
+        id: resolve
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${{ env.RELEASE_TAG }}"
+          REF="${{ env.RELEASE_REF }}"
+          if [ -n "$TAG" ]; then
+            if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "ERROR: tag must be vX.Y.Z (got: ${TAG})" >&2
+              exit 1
+            fi
+            VERSION="${TAG#v}"
+            echo "publish_release=true" >> "$GITHUB_OUTPUT"
+            echo "release_tag=${TAG}" >> "$GITHUB_OUTPUT"
+            echo "release_version=${VERSION}" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish_release=false" >> "$GITHUB_OUTPUT"
+            echo "release_tag=" >> "$GITHUB_OUTPUT"
+            echo "release_version=" >> "$GITHUB_OUTPUT"
+          fi
+          echo "release_ref=${REF}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG:-none} version=${VERSION:-n/a} ref=${REF} publish=${TAG:+true}${TAG:-false}"
+
   linux:
+    needs: meta
     if: >-
       github.event_name != 'workflow_dispatch' ||
       inputs.platforms == 'all' ||
@@ -65,14 +133,20 @@ jobs:
         - /home/runner/.cargo:/github/home/.cargo
         - /home/runner/.rustup:/github/home/.rustup
     steps:
-      - name: Install git
-        run: dnf install -y git
+      - name: Install git and python3
+        run: dnf install -y git python3
         shell: bash
 
       - name: Check out repository code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
+          ref: ${{ needs.meta.outputs.release_ref }}
           submodules: recursive
+
+      - name: Apply point version from release tag
+        if: needs.meta.outputs.publish_release == 'true'
+        shell: bash
+        run: python3 scripts/apply_release_version.py "${{ needs.meta.outputs.release_version }}"
 
       - uses: ./.github/actions/build-linux
         with:
@@ -89,19 +163,20 @@ jobs:
 
       - name: Package install tree
         run: |
-          tar -czf openrv-linux-x86_64-Release-CY2025.tar.gz -C _install .
-          ls -lh openrv-linux-x86_64-Release-CY2025.tar.gz
+          tar -czf "${{ env.ARTIFACT_LINUX }}.tar.gz" -C _install .
+          ls -lh "${{ env.ARTIFACT_LINUX }}.tar.gz"
         shell: bash
 
       - name: Upload Linux artifact
         uses: actions/upload-artifact@v4
         with:
-          name: openrv-linux-x86_64-Release-CY2025
-          path: openrv-linux-x86_64-Release-CY2025.tar.gz
+          name: ${{ env.ARTIFACT_LINUX }}
+          path: ${{ env.ARTIFACT_LINUX }}.tar.gz
           if-no-files-found: error
           retention-days: 14
 
   macos-arm:
+    needs: meta
     if: >-
       github.event_name != 'workflow_dispatch' ||
       inputs.platforms == 'all' ||
@@ -112,7 +187,13 @@ jobs:
       - name: Check out repository code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
+          ref: ${{ needs.meta.outputs.release_ref }}
           submodules: recursive
+
+      - name: Apply point version from release tag
+        if: needs.meta.outputs.publish_release == 'true'
+        shell: bash
+        run: python3 scripts/apply_release_version.py "${{ needs.meta.outputs.release_version }}"
 
       - uses: ./.github/actions/build-macos
         with:
@@ -131,19 +212,20 @@ jobs:
 
       - name: Package install tree
         run: |
-          tar -czf openrv-macos-arm64-Release-CY2025.tar.gz -C _install .
-          ls -lh openrv-macos-arm64-Release-CY2025.tar.gz
+          tar -czf "${{ env.ARTIFACT_MACOS }}.tar.gz" -C _install .
+          ls -lh "${{ env.ARTIFACT_MACOS }}.tar.gz"
         shell: bash
 
       - name: Upload macOS ARM artifact
         uses: actions/upload-artifact@v4
         with:
-          name: openrv-macos-arm64-Release-CY2025
-          path: openrv-macos-arm64-Release-CY2025.tar.gz
+          name: ${{ env.ARTIFACT_MACOS }}
+          path: ${{ env.ARTIFACT_MACOS }}.tar.gz
           if-no-files-found: error
           retention-days: 14
 
   windows:
+    needs: meta
     if: >-
       github.event_name != 'workflow_dispatch' ||
       inputs.platforms == 'all' ||
@@ -156,7 +238,13 @@ jobs:
       - name: Check out repository code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
+          ref: ${{ needs.meta.outputs.release_ref }}
           submodules: recursive
+
+      - name: Apply point version from release tag
+        if: needs.meta.outputs.publish_release == 'true'
+        shell: bash
+        run: python scripts/apply_release_version.py "${{ needs.meta.outputs.release_version }}"
 
       - uses: ./.github/actions/build-windows
         with:
@@ -173,14 +261,83 @@ jobs:
 
       - name: Package install tree
         run: |
-          7z a -tzip openrv-windows-x86_64-Release-CY2025.zip ./_install/*
-          ls -lh openrv-windows-x86_64-Release-CY2025.zip
+          7z a -tzip "${{ env.ARTIFACT_WINDOWS }}.zip" ./_install/*
+          ls -lh "${{ env.ARTIFACT_WINDOWS }}.zip"
         shell: msys2 {0}
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
         with:
-          name: openrv-windows-x86_64-Release-CY2025
-          path: openrv-windows-x86_64-Release-CY2025.zip
+          name: ${{ env.ARTIFACT_WINDOWS }}
+          path: ${{ env.ARTIFACT_WINDOWS }}.zip
           if-no-files-found: error
           retention-days: 14
+
+  # ── Publish GitHub Release with stable asset names ────────────────────────
+  release:
+    name: Publish GitHub Release
+    needs: [meta, linux, macos-arm, windows]
+    if: >-
+      always() &&
+      !cancelled() &&
+      needs.meta.outputs.publish_release == 'true' &&
+      (needs.linux.result == 'success' || needs.linux.result == 'skipped') &&
+      (needs.macos-arm.result == 'success' || needs.macos-arm.result == 'skipped') &&
+      (needs.windows.result == 'success' || needs.windows.result == 'skipped') &&
+      (
+        needs.linux.result == 'success' ||
+        needs.macos-arm.result == 'success' ||
+        needs.windows.result == 'success'
+      ) &&
+      needs.linux.result != 'failure' &&
+      needs.macos-arm.result != 'failure' &&
+      needs.windows.result != 'failure'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: List release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Release assets:"
+          ls -lah artifacts/
+          # Fail if nothing to publish
+          test -n "$(find artifacts -type f | head -1)"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2.5.0
+        with:
+          tag_name: ${{ needs.meta.outputs.release_tag }}
+          # On workflow_dispatch, create/point the tag at the ref we built.
+          # On tag push, leave unset so the existing tag's commit is used.
+          target_commitish: ${{ github.event_name == 'workflow_dispatch' && needs.meta.outputs.release_ref || '' }}
+          name: "Open RV ${{ needs.meta.outputs.release_tag }}"
+          generate_release_notes: true
+          files: artifacts/*
+          fail_on_unmatched_files: true
+          body: |
+            Prebuilt **Release** packages (VFX Platform CY2025, Qt 6.5.3, Python 3.11).
+
+            ### Stable download links
+
+            These asset names stay the same across releases so `/releases/latest/download/` URLs keep working:
+
+            | Platform | Asset |
+            |----------|--------|
+            | Linux x86_64 | `openrv-linux-x86_64.tar.gz` |
+            | macOS Apple Silicon | `openrv-macos-arm64.tar.gz` |
+            | Windows x64 | `openrv-windows-x86_64.zip` |
+
+            Example:
+            ```
+            https://github.com/${{ github.repository }}/releases/latest/download/openrv-linux-x86_64.tar.gz
+            ```
+
+            Unpack the archive and run the Open RV binary from the install tree.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
