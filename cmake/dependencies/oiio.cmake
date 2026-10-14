@@ -62,7 +62,26 @@ IF(NOT RV_VFX_CY2023)
     LIST(APPEND _configure_options "-DOpenColorIO_DIR=${RV_DEPS_OCIO_ROOT_DIR}/lib/cmake/OpenColorIO")
   ENDIF()
 ENDIF()
-LIST(APPEND _configure_options "-DUSE_FREETYPE=0")
+# GIF stays off: OIIO's gif plugin needs giflib, which OpenRV does not vendor.
+# Freetype is already built (or installed on Linux) and is turned on for release
+# codec builds so the OIIO font/image plugin is not compiled out.
+IF(RV_ENABLE_ALL_CODECS)
+  LIST(APPEND _configure_options "-DUSE_FREETYPE=ON")
+  LIST(
+    APPEND
+    _configure_options
+    "-DUSE_OPENEXR=ON"
+    "-DUSE_JPEG=ON"
+    "-DUSE_PNG=ON"
+    "-DUSE_TIFF=ON"
+    "-DUSE_OPENJPEG=ON"
+    "-DUSE_WEBP=ON"
+    "-DUSE_LIBRAW=ON"
+    "-DUSE_OPENJPH=ON"
+  )
+ELSE()
+  LIST(APPEND _configure_options "-DUSE_FREETYPE=0")
+ENDIF()
 LIST(APPEND _configure_options "-DUSE_GIF=OFF")
 
 # Write an initial-cache script so CMAKE_PREFIX_PATH (a semicolon-separated list) survives ExternalProject's double expansion of CONFIGURE_COMMAND args. Uses

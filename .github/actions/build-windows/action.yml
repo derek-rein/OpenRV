@@ -66,6 +66,7 @@ runs:
           mingw-w64-x86_64-libarchive
           mingw-w64-x86_64-make
           mingw-w64-x86_64-meson
+          mingw-w64-x86_64-pkgconf
           mingw-w64-x86_64-toolchain
           autoconf
           automake
@@ -163,10 +164,9 @@ runs:
       shell: msys2 {0}
 
     - name: Setup sccache
-      # Used for this run only (SCCACHE_GHA_ENABLED=false); not stored in Actions cache.
-      # For sccache to actually cache the Windows/MSVC build, CMake must use it as the compiler
-      # launcher, e.g. -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
-      # in the Configure OpenRV step (and sccache must be on PATH when the build runs).
+      # cmake/macros/rv_compiler_cache.cmake selects sccache when it is on PATH
+      # and sets CMAKE_<LANG>_COMPILER_LAUNCHER. Persistence uses the GitHub
+      # Actions cache when the job sets SCCACHE_GHA_ENABLED=true.
       uses: mozilla-actions/sccache-action@v0.0.6
       with:
         version: "v0.8.1"
@@ -181,7 +181,7 @@ runs:
       run: |
         cmake --version
         export QT_HOME=c:/Qt/${{ inputs.qt-version }}/msvc2019_64
-        cmake -B _build -G "Visual Studio 17 2022" -A x64 -DRV_DEPS_WIN_PERL_ROOT=c:/Strawberry/perl/bin -DCMAKE_BUILD_TYPE=${{ inputs.build-type }} -DRV_DEPS_QT_LOCATION=$QT_HOME -DRV_VFX_PLATFORM=${{ inputs.vfx-platform }}
+        cmake -B _build -G "Visual Studio 17 2022" -A x64 -DRV_DEPS_WIN_PERL_ROOT=c:/Strawberry/perl/bin -DCMAKE_BUILD_TYPE=${{ inputs.build-type }} -DRV_DEPS_QT_LOCATION=$QT_HOME -DRV_VFX_PLATFORM=${{ inputs.vfx-platform }} -DRV_ENABLE_ALL_CODECS=ON
       shell: msys2 {0}
 
     - name: Build OpenRV dependencies

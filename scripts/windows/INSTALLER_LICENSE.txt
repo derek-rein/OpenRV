@@ -1,0 +1,18 @@
+Open RV for Windows
+Publisher: DerekVFX
+
+This installer packages an Open RV build configured with -DRV_ENABLE_ALL_CODECS=ON.
+
+The FFmpeg in that build is configured with --enable-gpl and is linked to x264 and
+x265 (GPL-2.0-or-later) plus libvpx and libaom (BSD). The combined binary is a
+GPL-licensed work. Redistribution must satisfy the GPL, including offering
+corresponding source. This build does not pass FFmpeg --enable-nonfree.
+
+Several enabled codecs (H.264, H.265, AAC, AC-3, MPEG-2, DNxHD, and others) are
+patent-encumbered. Shipping the binary may require a patent license in your
+country. This notice is not legal advice.
+
+Proprietary camera and I/O SDKs (Apple ProRes decoder SDK, RED R3D, ARRI RAW,
+Blackmagic RAW, Blackmagic DeckLink, NDI) are not included.
+
+See docs/build_system/release_codecs_and_signing.md in the source tree.

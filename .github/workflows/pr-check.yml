@@ -48,6 +48,10 @@ jobs:
           python3 scripts/apply_release_version.py --dry-run "$V"
           python3 scripts/apply_release_version.py --dry-run "v${V}"
 
+      - name: Check release codec preset
+        shell: bash
+        run: python3 scripts/ci/check_codec_options.py
+
       - name: Require multi-platform release workflows
         shell: bash
         run: |

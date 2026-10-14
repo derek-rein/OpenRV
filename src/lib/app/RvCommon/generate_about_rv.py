@@ -101,6 +101,26 @@ def get_dependencies_info(versions, app_name, platform=""):
         ("zlib", get_version("zlib"), "zlib License"),
     ]
 
+    # Present only when this fork's GPL/BSD codec preset actually linked them.
+    for label, key, lic in (
+        ("libaom", "libaom", "BSD 2-Clause"),
+        ("libvpx", "libvpx", "BSD"),
+        ("x264", "x264", "GPL-2.0-or-later"),
+        ("x265", "x265", "GPL-2.0-or-later"),
+    ):
+        if versions.get(key):
+            other_deps.append((label, versions[key], lic))
+
+    if versions.get("x264") or versions.get("x265"):
+        for index, dep in enumerate(other_deps):
+            if dep[0] == "FFmpeg":
+                other_deps[index] = (
+                    "FFmpeg",
+                    dep[1],
+                    "GPL-2.0-or-later (x264/x265 linked; --enable-nonfree is not set)",
+                )
+                break
+
     return vfx_deps, other_deps, rv_specific_deps
 
 

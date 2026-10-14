@@ -15,8 +15,9 @@
 #
 # Stable download URLs (do not put the version in the filename):
 #   https://github.com/<owner>/<repo>/releases/latest/download/openrv-linux-x86_64.tar.gz
-#   https://github.com/<owner>/<repo>/releases/latest/download/openrv-macos-arm64.tar.gz
-#   https://github.com/<owner>/<repo>/releases/latest/download/openrv-windows-x86_64.zip
+#   https://github.com/<owner>/<repo>/releases/latest/download/openrv-macos-arm64.dmg
+#   https://github.com/<owner>/<repo>/releases/latest/download/openrv-windows-x86_64-setup.exe
+# Raw install trees are also uploaded (tar.gz / zip) next to the DMG and installer.
 #
 # Point versions: tags are plain semver, e.g. v4.0.2. The tag is the published
 # version; CMakeLists.txt is patched for that build so the binary reports it.
@@ -102,13 +103,17 @@ jobs:
               exit 1
             fi
             VERSION="${TAG#v}"
-            echo "publish_release=true" >> "$GITHUB_OUTPUT"
-            echo "release_tag=${TAG}" >> "$GITHUB_OUTPUT"
-            echo "release_version=${VERSION}" >> "$GITHUB_OUTPUT"
+            {
+              echo "publish_release=true"
+              echo "release_tag=${TAG}"
+              echo "release_version=${VERSION}"
+            } >> "$GITHUB_OUTPUT"
           else
-            echo "publish_release=false" >> "$GITHUB_OUTPUT"
-            echo "release_tag=" >> "$GITHUB_OUTPUT"
-            echo "release_version=" >> "$GITHUB_OUTPUT"
+            {
+              echo "publish_release=false"
+              echo "release_tag="
+              echo "release_version="
+            } >> "$GITHUB_OUTPUT"
           fi
           echo "release_ref=${REF}" >> "$GITHUB_OUTPUT"
           echo "tag=${TAG:-none} version=${VERSION:-n/a} ref=${REF} publish=${TAG:+true}${TAG:-false}"
@@ -190,6 +195,9 @@ jobs:
       inputs.platforms == 'macos'
     name: 'macOS ARM64 CY2025 Release'
     runs-on: macos-14
+    # OpenRV itself can take a few hours. Notarization is polled for up to 4h
+    # inside the same job. 360 is the hosted-runner job cap.
+    timeout-minutes: 360
     steps:
       - name: Check out repository code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -217,17 +225,30 @@ jobs:
           # Qt 6 clang_64 is universal arm64+x86_64 prebuilt — no source build.
           macos_qt6_modules: 'qt5compat qtimageformats qtmultimedia qtpositioning qtwebchannel qtwebengine qtwebsockets'
 
-      - name: Package install tree
-        run: |
-          tar -czf "${{ env.ARTIFACT_MACOS }}.tar.gz" -C _install .
-          ls -lh "${{ env.ARTIFACT_MACOS }}.tar.gz"
+      - name: Sign, notarize, and build DMG
         shell: bash
+        env:
+          MACOS_CERT_P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+          MACOS_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_API_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
+          DMG_NAME: ${{ env.ARTIFACT_MACOS }}.dmg
+        run: |
+          chmod +x scripts/macos/sign_and_notarize.sh
+          scripts/macos/sign_and_notarize.sh "${GITHUB_WORKSPACE}/_install" "${GITHUB_WORKSPACE}/dist"
+          tar -czf "${{ env.ARTIFACT_MACOS }}.tar.gz" -C _install .
+          ls -lh "dist/${{ env.ARTIFACT_MACOS }}.dmg" "${{ env.ARTIFACT_MACOS }}.tar.gz"
 
       - name: Upload macOS ARM artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.ARTIFACT_MACOS }}
-          path: ${{ env.ARTIFACT_MACOS }}.tar.gz
+          path: |
+            dist/${{ env.ARTIFACT_MACOS }}.dmg
+            ${{ env.ARTIFACT_MACOS }}.tar.gz
           if-no-files-found: error
           retention-days: 14
 
@@ -240,7 +261,9 @@ jobs:
     name: 'Windows x86_64 CY2025 Release'
     runs-on: windows-2022
     env:
-      SCCACHE_GHA_ENABLED: false
+      # Persist sccache in the Actions cache. rv_compiler_cache.cmake uses it
+      # as the compiler launcher when sccache is on PATH.
+      SCCACHE_GHA_ENABLED: true
     steps:
       - name: Check out repository code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -272,11 +295,30 @@ jobs:
           ls -lh "${{ env.ARTIFACT_WINDOWS }}.zip"
         shell: msys2 {0}
 
+      - name: Build Inno Setup installer
+        shell: powershell
+        run: |
+          choco install innosetup --yes --no-progress
+          $iscc = Get-ChildItem "C:\Program Files (x86)\Inno Setup*\ISCC.exe" | Select-Object -First 1 -ExpandProperty FullName
+          if (-not $iscc) { throw "ISCC.exe not found after installing Inno Setup" }
+          $version = "${{ needs.meta.outputs.release_version }}"
+          if (-not $version) { $version = "0.0.0" }
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          & $iscc `
+            "/DSourceDir=${{ github.workspace }}\_install" `
+            "/DAppVersion=$version" `
+            "/DOutputDir=${{ github.workspace }}\dist" `
+            "/DOutputBaseFilename=${{ env.ARTIFACT_WINDOWS }}-setup" `
+            "${{ github.workspace }}\scripts\windows\openrv.iss"
+          Get-ChildItem dist
+
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.ARTIFACT_WINDOWS }}
-          path: ${{ env.ARTIFACT_WINDOWS }}.zip
+          path: |
+            ${{ env.ARTIFACT_WINDOWS }}.zip
+            dist/${{ env.ARTIFACT_WINDOWS }}-setup.exe
           if-no-files-found: error
           retention-days: 14
 
@@ -345,23 +387,27 @@ jobs:
           files: artifacts/*
           fail_on_unmatched_files: true
           body: |
-            Prebuilt **Release** packages (VFX Platform CY2025, Qt 6.5.3, Python 3.11).
+            Prebuilt **Release** packages (VFX Platform CY2025, Qt 6.5.3, Python 3.11) with `-DRV_ENABLE_ALL_CODECS=ON`.
+
+            Codecs, GPL redistribution terms, and signing secrets are documented in `docs/build_system/release_codecs_and_signing.md`.
 
             ### Stable download links
 
             These asset names stay the same across releases so `/releases/latest/download/` URLs keep working:
 
-            | Platform | Asset |
-            |----------|--------|
+            | Platform | Install |
+            |----------|---------|
             | Linux x86_64 | `openrv-linux-x86_64.tar.gz` |
-            | macOS Apple Silicon | `openrv-macos-arm64.tar.gz` |
-            | Windows x64 | `openrv-windows-x86_64.zip` |
+            | macOS Apple Silicon | `openrv-macos-arm64.dmg` |
+            | Windows x64 | `openrv-windows-x86_64-setup.exe` |
+
+            The macOS tarball and Windows zip of the raw install tree are uploaded alongside those installers.
+
+            macOS signing and notarization run only when the Apple secrets are configured. Without them the DMG is unsigned.
 
             Example:
             ```
-            https://github.com/${{ github.repository }}/releases/latest/download/openrv-linux-x86_64.tar.gz
+            https://github.com/${{ github.repository }}/releases/latest/download/openrv-macos-arm64.dmg
             ```
-
-            Unpack the archive and run the Open RV binary from the install tree.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

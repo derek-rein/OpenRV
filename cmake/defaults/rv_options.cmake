@@ -163,3 +163,6 @@ SET_PROPERTY(
   CACHE RV_DEPS_VERSION_MATCH
   PROPERTY STRINGS EXACT MINIMUM
 )
+
+# Codec preset used by release CI. Defined here so it is visible before dependencies.
+INCLUDE(rv_codec_options)

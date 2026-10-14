@@ -205,6 +205,16 @@ ENDIF()
 
 OPTION(RV_FFMPEG_USE_VIDEOTOOLBOX "FFmpeg laveraging the VideoToolbox framework" ${RV_FFMPEG_USE_VIDEOTOOLBOX_DEFAULT_VALUE})
 
+# The option used to only define a C++ macro. Pass it through to FFmpeg itself on Apple.
+IF(RV_TARGET_DARWIN)
+  IF(RV_FFMPEG_USE_VIDEOTOOLBOX)
+    LIST(APPEND RV_FFMPEG_EXTERNAL_LIBS "--enable-videotoolbox")
+    MESSAGE(STATUS "FFmpeg VideoToolbox enabled")
+  ELSE()
+    LIST(APPEND RV_FFMPEG_EXTERNAL_LIBS "--disable-videotoolbox")
+  ENDIF()
+ENDIF()
+
 # Make a list of the Open RV's FFmpeg config options unless already customized. Note that a super project, a project consuming Open RV as a submodule, can
 # customize the FFmpeg config options via the RV_FFMPEG_CONFIG_OPTIONS cmake property.
 IF(NOT RV_FFMPEG_CONFIG_OPTIONS)
@@ -279,9 +289,19 @@ IF(NOT RV_FFMPEG_CONFIG_OPTIONS)
     ENDIF()
   ENDFOREACH()
 
-  LIST(APPEND _disabled_parsers "--disable-parser=vp9")
+  # The VP9 parser is required to demux VP9. Keep it when the decoder is enabled.
+  IF(NOT "vp9" IN_LIST RV_FFMPEG_NON_FREE_DECODERS_TO_ENABLE)
+    LIST(APPEND _disabled_parsers "--disable-parser=vp9")
+  ELSE()
+    MESSAGE(STATUS "FFmpeg parser vp9 enabled")
+  ENDIF()
 
-  LIST(APPEND _disabled_filters "--disable-filter=geq")
+  # vf_geq is GPL. It stays disabled unless this build already opted into --enable-gpl.
+  IF(NOT RV_FFMPEG_ENABLE_GPL)
+    LIST(APPEND _disabled_filters "--disable-filter=geq")
+  ELSE()
+    MESSAGE(STATUS "FFmpeg filter geq enabled (GPL build)")
+  ENDIF()
 
   LIST(APPEND _disabled_protocols "--disable-protocol=ffrtmpcrypt")
   LIST(APPEND _disabled_protocols "--disable-protocol=rtmpe")
@@ -327,6 +347,9 @@ SET(_ffmpeg_extra_pkgconfig_dirs
 )
 IF(RV_CONAN_CMAKE_PREFIX_PATH)
   LIST(APPEND _ffmpeg_extra_pkgconfig_dirs "${RV_CONAN_CMAKE_PREFIX_PATH}")
+ENDIF()
+IF(RV_GPL_CODEC_PKGCONFIG_DIRS)
+  LIST(APPEND _ffmpeg_extra_pkgconfig_dirs ${RV_GPL_CODEC_PKGCONFIG_DIRS})
 ENDIF()
 RV_BUILD_PKG_CONFIG_PATH(_ffmpeg_pkg_config_path EXTRA_DIRS ${_ffmpeg_extra_pkgconfig_dirs})
 

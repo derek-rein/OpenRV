@@ -693,7 +693,12 @@ namespace TwkMovie
 #endif
         };
 
-        const char* supportedEncodingCodecsArray[] = {"dvvideo", "libx264", "mjpeg", "pcm_s16be", "rawvideo", 0};
+        // Whitelist of encoders the writer will advertise. av_codec_iterate still
+        // has to find the codec, so names whose libraries were not linked (for
+        // example libx265 in a non-GPL build) simply do not appear.
+        const char* supportedEncodingCodecsArray[] = {"dvvideo",     "libx264", "libx265", "libvpx",    "libvpx-vp9", "libaom-av1", "aac",
+                                                      "dnxhd",       "prores",  "prores_aw", "prores_ks", "qtrle",      "mjpeg",      "pcm_s16be",
+                                                      "rawvideo",    0};
 
         const char* metadataFieldsArray[] = {"album",       "album_artist", "artist",     "author", "comment",  "composer", "copyright",
                                              "description", "encoder",      "episode_id", "genre",  "grouping", "lyrics",   "network",
@@ -6080,11 +6085,11 @@ namespace TwkMovie
         formats["mp4"] = make_pair("MPEG-4 Movie Container", vidcap);
         formats["mpg"] = make_pair("MPEG Format", vidcap);
         formats["mxf"] = make_pair("Material eXchange Format", vidcap);
-        //    formats["ogv"]  = make_pair("OGG Video", vidcap);
-        //    formats["webm"] = make_pair("WEBM Video", vidcap);
+        formats["ogv"] = make_pair("OGG Video", vidcap);
+        formats["webm"] = make_pair("WEBM Video", vidcap);
 
         // Audio
-        //    formats["aac"]  = make_pair("Advanced Audio Codec", audcap);
+        formats["aac"] = make_pair("Advanced Audio Codec", audcap);
         formats["aif"] = make_pair("Apple AIFF audio file", audcap);
         formats["aifc"] = make_pair("Apple AIFC compressed audio file", audcap);
         formats["aiff"] = make_pair("Apple AIFF audio file", audcap);

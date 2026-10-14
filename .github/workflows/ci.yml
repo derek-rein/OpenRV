@@ -1,5 +1,14 @@
 name: OpenRV
 
+# Upstream schedules a midnight cron (`0 0 * * *`). On a full matrix that is
+# Rocky 8 and 9, macOS x86_64 and arm64, and Windows, Release and Debug, for
+# every VFX platform in ci-linux.yml / ci-macos.yml / ci-windows.yml. Jobs are
+# also gated on github.repository_owner == AcademySoftwareFoundation, so a cron
+# run on this fork would skip and bill nothing, but GitHub would still queue
+# the workflow. The cron is removed here. workflow_dispatch remains.
+# Push and pull_request jobs stay owner-gated, so this fork does not spend
+# minutes on the ASWF matrix.
+
 on:
   push:
     branches:
@@ -7,10 +16,6 @@ on:
       - main
 
   pull_request: # This handles PR creation and subsequent commits.
-
-  schedule:
-    # Midnight build every day
-    - cron: "0 0 * * *"
 
   # This allows manual triggering of the workflow from the web
   workflow_dispatch:
