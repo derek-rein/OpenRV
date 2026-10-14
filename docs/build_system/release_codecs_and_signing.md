@@ -105,6 +105,8 @@ Encrypted RTMP protocols (`ffrtmpcrypt`, `rtmpe`, `rtmpte`) stay disabled. They 
 
 ## macOS signing and notarization
 
+Notarization does not hold the macOS runner. The macOS job signs, builds the DMG, submits it, and exits. A separate `ubuntu-latest` workflow staples the ticket after Apple accepts.
+
 `scripts/macos/sign_and_notarize.sh` runs at the end of the macOS release job.
 
 1. If any required secret is empty, it logs the names and writes an **unsigned** DMG (`openrv-macos-arm64.dmg`). Fork pull requests never receive secrets, so this is the expected path there. Multi-platform Build does not run on pull requests anyway.
@@ -113,10 +115,26 @@ Encrypted RTMP protocols (`ffrtmpcrypt`, `rtmpe`, `rtmpte`) stay disabled. They 
 4. The Developer ID certificate is imported into a temporary keychain from `MACOS_CERT_P12_BASE64`.
 5. Every Mach-O under `RV.app` is signed inside-out (dylibs, `.so`, frameworks, plugins, Python extensions, nested apps), hardened runtime (`--options runtime`) plus a timestamp. Executables and bundles get `scripts/macos/entitlements.plist`: `allow-jit`, `allow-unsigned-executable-memory`, `disable-library-validation` (PySide/Python plugins), plus audio input, network client, and user-selected files.
 6. A DMG is built (app plus an `/Applications` symlink) and signed.
-7. `xcrun notarytool submit` is called **without** `--wait`. The script polls `xcrun notarytool info` for up to 4 hours, logging each status. On `Invalid` or `Rejected` it fetches `notarytool log` and fails.
-8. `xcrun stapler staple` on the DMG (and on the app when Apple has that ticket), then `spctl --assess` on the DMG.
+7. `xcrun notarytool submit` is called **without** `--wait` and **without** a status poll. The script writes `dist/notarize-pending.json` (`submission_id`, `run_id`, `dmg_name`, `sha256`, `target_tag`) and returns.
+8. The workflow uploads that JSON next to the signed DMG as a build artifact, and `scripts/macos/publish_notarize_queue.sh` puts `pending-<submission-id>.json` plus `pending-<submission-id>.dmg` on the **draft** GitHub release tag `notarize-queue`. Do not publish that draft. It is only a mailbox.
 
-The macOS job `timeout-minutes` is 360, which is the hosted-runner cap. A long compile plus a slow notarization can still hit that cap. The poll itself is 4 hours as requested; it holds the macOS runner the whole time.
+The macOS job `timeout-minutes` is still 360 because the compile can take a few hours. Waiting for Apple is no longer part of that window. The only Apple time left on the macOS runner is the `notarytool submit` upload itself (the DMG transfer, typically a few minutes), then the job exits. Notarization analysis costs **0 macOS minutes**.
+
+`workflow_dispatch` input `wait_for_notarization` defaults to **false**. Set it only for a one-off that should poll `notarytool info` for up to 4 hours, staple with `xcrun stapler`, and `spctl` on the macOS runner. That path does not write a queue record.
+
+### Notarize finish (Ubuntu)
+
+`.github/workflows/notarize-finish.yml` runs on `ubuntu-latest` every 15 minutes, and on `workflow_dispatch` with optional `submission_id` and `run_id`. GitHub runs the cron only from the default branch, so it starts after this file is merged. The macOS job does not dispatch the finisher: a dispatch cannot be delayed, and an immediate check would still see "In Progress".
+
+1. `gh release view notarize-queue` lists assets. If there is no `pending-*.json`, the job prints `no pending notarization submissions` and exits 0. It does not call Apple and does not download `rcodesign`.
+2. Otherwise one JWT is signed from `ASC_KEY_ID`, `ASC_ISSUER_ID`, and `ASC_API_KEY_P8` (ES256, `aud` `appstoreconnect-v1`) and the script `GET`s `https://appstoreconnect.apple.com/notary/v2/submissions/{id}`.
+3. **In Progress** (or any other non-terminal status): log the status and leave the marker. The job still exits in seconds.
+4. **Accepted:** download the queued DMG, check its sha256, fetch and print the notary log (`GET .../submissions/{id}/logs`, then the `developerLogUrl`), staple with `rcodesign staple` from the apple-codesign 0.29.0 Linux musl build, then `rcodesign verify` and `rcodesign print-signature-info`. The stapled DMG replaces `openrv-macos-arm64.dmg` on the versioned release (`target_tag` in the JSON) via `gh release upload --clobber`. The `pending-*` assets are deleted so the next cron will not process them again. If the versioned release does not exist yet, the marker stays and the next run retries.
+5. **Invalid or Rejected:** print the notary log, upload it as `failed-<id>.log` on the queue, delete the pending marker, and fail the job.
+
+The finisher is idempotent. A second run after a successful staple finds no pending marker. A run that dies after Apple accepts but before the marker is deleted staples and uploads again (`--clobber` replaces the same asset name).
+
+There is a window after the GitHub Release is published and before Apple has accepted where the downloadable DMG is signed but not yet stapled. Gatekeeper can still reach Apple for the ticket once notarization has completed; stapling makes that check work offline. Expect the replacement within about 15 minutes after Apple accepts.
 
 ### Secrets Derek needs to add
 
@@ -149,6 +167,7 @@ The macOS job `timeout-minutes` is 360, which is the hosted-runner cap. A long c
 |----------|-----------------------------|-----------|
 | `OpenRV` (`.github/workflows/ci.yml`) | `0 0 * * *`. Full matrix via `ci-linux.yml`, `ci-macos.yml`, `ci-windows.yml`: Rocky 8 and 9, macOS x86_64 and arm64, Windows, Release always, Debug when the matrix is full. Several hours per platform | Cron removed. Jobs were already `if: github.repository_owner == 'AcademySoftwareFoundation'`, so a queued run would have skipped and billed about nothing. Removing the cron means GitHub does not queue it. `workflow_dispatch` remains |
 | `Conan-OpenRV` | `0 0 * * *`. Conan install/build for Rocky 8/9, macOS arm64, and Windows. Not used by the release packages | Cron removed. Same owner gate, plus `workflow_dispatch` if someone is actually working on Conan packaging |
-| `Multi-platform Build` | Tag push or manual dispatch only. Not a nightly. `platforms` input is `all`, `linux`, `macos`, or `windows` | Unchanged trigger. Configure passes `-DRV_ENABLE_ALL_CODECS=ON`. Qt is cached (aqt). macOS dependency objects are cached, with the key including the codec CMake files. ccache (500 MB) is persisted on Linux and macOS. Windows sccache uses the Actions cache (`SCCACHE_GHA_ENABLED=true`) |
+| `Multi-platform Build` | Tag push or manual dispatch only. Not a nightly. `platforms` input is `all`, `linux`, `macos`, or `windows` | Unchanged trigger. Configure passes `-DRV_ENABLE_ALL_CODECS=ON`. Qt is cached (aqt). macOS dependency objects are cached, with the key including the codec CMake files. ccache (500 MB) is persisted on Linux and macOS. Windows sccache uses the Actions cache (`SCCACHE_GHA_ENABLED=true`). Notarization waiting is not part of the macOS job |
+| `Notarize finish` | Not an upstream workflow | `ubuntu-latest` every 15 minutes, plus `workflow_dispatch`. One `gh release view` and exit 0 when `notarize-queue` has no `pending-*.json`. An in-progress submission is a single Notary API GET and exit. `rcodesign` is downloaded only after Apple accepts |
 
 Do not turn the multi-platform workflow on for every push. One platform at a time is the `platforms` input on **Actions → Multi-platform Build → Run workflow**.

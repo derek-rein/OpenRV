@@ -1,0 +1,70 @@
+# Staple DMGs after Apple notarization, off the macOS runner.
+#
+# Multi-platform Build submits the signed DMG and exits. Pending submissions
+# are assets on the draft release tag `notarize-queue`. This workflow looks at
+# that list and returns without calling Apple when it is empty.
+#
+# Schedule is every 15 minutes. GitHub only runs the cron from the default
+# branch, after this file is merged. workflow_dispatch can target one
+# submission id or the GitHub Actions run that submitted it.
+#
+# A delayed dispatch from the macOS job is not available, so the schedule is
+# what picks the submission up.
+
+name: Notarize finish
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+    inputs:
+      submission_id:
+        description: 'Apple notarization submission id (empty = every pending marker)'
+        required: false
+        type: string
+        default: ''
+      run_id:
+        description: 'GitHub Actions run id that submitted the DMG (empty = every pending marker)'
+        required: false
+        type: string
+        default: ''
+
+concurrency:
+  group: notarize-finish
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  finish:
+    name: Staple accepted DMGs
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          fetch-depth: 1
+
+      - name: Check Apple and staple anything accepted
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_API_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
+          NOTARIZE_SUBMISSION_ID: ${{ github.event_name == 'workflow_dispatch' && inputs.submission_id || '' }}
+          NOTARIZE_RUN_ID: ${{ github.event_name == 'workflow_dispatch' && inputs.run_id || '' }}
+        run: |
+          mkdir -p notarize-out
+          python3 scripts/macos/notarize_finish.py finish
+
+      - name: Upload stapled DMGs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: notarized-macos-dmg
+          path: notarize-out/*.dmg
+          if-no-files-found: ignore
+          retention-days: 14

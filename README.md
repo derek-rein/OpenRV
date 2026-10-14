@@ -73,7 +73,7 @@ gh workflow run "Multi-platform Build" --ref main -f tag=vX.Y.Z -f platforms=all
 
 Full multi-platform builds run **only after merge** (or manual Actions dispatch / human tag push) — never on the PR itself. The PR only needs the light **PR Check** gate.
 
-**Note:** Upstream's midnight **OpenRV** and **Conan-OpenRV** crons are disabled on this fork so they are not queued. Both were already owner-gated to AcademySoftwareFoundation (a skipped run bills nothing). Prebuilt packages do **not** use the Conan workflow. Dispatch **Multi-platform Build** and pick `linux`, `macos`, or `windows` when you only need one platform.
+**Note:** Upstream's midnight **OpenRV** and **Conan-OpenRV** crons are disabled on this fork so they are not queued. Both were already owner-gated to AcademySoftwareFoundation (a skipped run bills nothing). Prebuilt packages do **not** use the Conan workflow. Dispatch **Multi-platform Build** and pick `linux`, `macos`, or `windows` when you only need one platform. macOS notarization is submitted and the runner exits; **Notarize finish** (Ubuntu, every 15 minutes) staples the DMG after Apple accepts and replaces the release asset. An empty queue is a no-op.
 
 ## Cloning the repository
 

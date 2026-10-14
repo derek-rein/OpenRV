@@ -1,13 +1,17 @@
 #!/bin/bash
-# Sign RV.app (inside-out), wrap it in a DMG, notarize with notarytool, staple, and spctl.
+# Sign RV.app (inside-out), wrap it in a DMG, and submit that DMG for notarization.
 #
 # Signing identity is fixed to the company Developer ID. A personal identity in
 # MACOS_SIGNING_IDENTITY is a hard error. When the Apple secrets are absent the
 # script still writes an unsigned DMG and exits 0 so fork PRs and unconfigured
 # dispatches produce an artifact.
 #
-# Notarization is submitted WITHOUT --wait. Status is polled with
-# `notarytool info` for up to 4 hours.
+# `notarytool submit` is called without --wait. The default path writes
+# dist/notarize-pending.json and returns so the macOS runner is not held for
+# Apple's analysis. Stapling runs later on ubuntu via scripts/macos/notarize_finish.py.
+#
+# WAIT_FOR_NOTARIZATION=true restores the old in-job poll (up to 4 hours),
+# stapler, and spctl. The release workflow leaves that off.
 
 set -euo pipefail
 
@@ -67,6 +71,17 @@ secrets_present() {
     && -n "${ASC_KEY_ID:-}" \
     && -n "${ASC_ISSUER_ID:-}" \
     && -n "${ASC_API_KEY_P8:-}" ]]
+}
+
+wait_requested() {
+  case "${WAIT_FOR_NOTARIZATION:-}" in
+    1 | true | TRUE | yes | YES)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
 }
 
 missing_secret_names() {
@@ -315,23 +330,33 @@ main() {
       log "ERROR: notarytool submit did not return an id"
       exit 1
     fi
-    poll_notarization "${submission_id}"
-    log "Stapling ${dmg}"
-    xcrun stapler staple "${dmg}"
-    # The app's cdhash was included in the DMG notarization. Staple it too when Apple has the ticket.
-    if xcrun stapler staple "${app}"; then
-      log "Stapled ${app}"
+    if wait_requested; then
+      log "WAIT_FOR_NOTARIZATION is set; polling on this macOS runner (this holds the runner)."
+      poll_notarization "${submission_id}"
+      log "Stapling ${dmg}"
+      xcrun stapler staple "${dmg}"
+      if xcrun stapler staple "${app}"; then
+        log "Stapled ${app}"
+      else
+        log "WARNING: stapler could not staple ${app}; the DMG ticket is the one that ships"
+      fi
+      log "spctl ${dmg}"
+      spctl --assess --verbose=4 --type open --context context:primary-signature "${dmg}"
+      if spctl --assess --verbose=4 --type execute "${app}"; then
+        log "spctl accepted ${app}"
+      else
+        log "WARNING: spctl execute assessment of ${app} did not pass; DMG assessment did"
+      fi
+      log "Signed and notarized ${dmg} on this runner"
     else
-      log "WARNING: stapler could not staple ${app}; the DMG ticket is the one that ships"
+      python3 "${SCRIPT_DIR}/notarize_finish.py" write-record \
+        --output "${OUTPUT_DIR}/notarize-pending.json" \
+        --submission-id "${submission_id}" \
+        --dmg "${dmg}" \
+        --dmg-name "${DMG_NAME}"
+      log "Submitted ${submission_id}. Not waiting on this macOS runner."
+      log "Pending record: ${OUTPUT_DIR}/notarize-pending.json"
     fi
-    log "spctl ${dmg}"
-    spctl --assess --verbose=4 --type open --context context:primary-signature "${dmg}"
-    if spctl --assess --verbose=4 --type execute "${app}"; then
-      log "spctl accepted ${app}"
-    else
-      log "WARNING: spctl execute assessment of ${app} did not pass; DMG assessment did"
-    fi
-    log "Signed and notarized ${dmg}"
   else
     create_dmg "${app}" "${dmg}"
     log "Unsigned DMG written to ${dmg}"

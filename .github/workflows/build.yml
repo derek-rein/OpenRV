@@ -55,6 +55,11 @@ on:
         required: false
         type: string
         default: ''
+      wait_for_notarization:
+        description: 'Wait for notarization on the macOS runner (default off; burns macOS minutes)'
+        required: false
+        default: false
+        type: boolean
 
   # Tags only — do not run on branch pushes (those show up as pre-merge PR checks
   # and burn ~2h × 3 OS before anyone has approved the PR).
@@ -195,8 +200,9 @@ jobs:
       inputs.platforms == 'macos'
     name: 'macOS ARM64 CY2025 Release'
     runs-on: macos-14
-    # OpenRV itself can take a few hours. Notarization is polled for up to 4h
-    # inside the same job. 360 is the hosted-runner job cap.
+    # The compile can take a few hours. Notarization is submitted and then
+    # left for notarize-finish.yml, so this window is only for the build
+    # (unless wait_for_notarization is turned on). 360 is the hosted cap.
     timeout-minutes: 360
     steps:
       - name: Check out repository code
@@ -225,7 +231,7 @@ jobs:
           # Qt 6 clang_64 is universal arm64+x86_64 prebuilt — no source build.
           macos_qt6_modules: 'qt5compat qtimageformats qtmultimedia qtpositioning qtwebchannel qtwebengine qtwebsockets'
 
-      - name: Sign, notarize, and build DMG
+      - name: Sign, build DMG, and submit for notarization
         shell: bash
         env:
           MACOS_CERT_P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
@@ -236,11 +242,13 @@ jobs:
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
           ASC_API_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
           DMG_NAME: ${{ env.ARTIFACT_MACOS }}.dmg
+          # Default off. Opt in only for a one-off that should poll on macOS.
+          WAIT_FOR_NOTARIZATION: ${{ github.event_name == 'workflow_dispatch' && inputs.wait_for_notarization && 'true' || 'false' }}
         run: |
           chmod +x scripts/macos/sign_and_notarize.sh
           scripts/macos/sign_and_notarize.sh "${GITHUB_WORKSPACE}/_install" "${GITHUB_WORKSPACE}/dist"
           tar -czf "${{ env.ARTIFACT_MACOS }}.tar.gz" -C _install .
-          ls -lh "dist/${{ env.ARTIFACT_MACOS }}.dmg" "${{ env.ARTIFACT_MACOS }}.tar.gz"
+          ls -lh "dist/${{ env.ARTIFACT_MACOS }}.dmg" "${{ env.ARTIFACT_MACOS }}.tar.gz" dist/notarize-pending.json || true
 
       - name: Upload macOS ARM artifact
         uses: actions/upload-artifact@v4
@@ -249,8 +257,16 @@ jobs:
           path: |
             dist/${{ env.ARTIFACT_MACOS }}.dmg
             ${{ env.ARTIFACT_MACOS }}.tar.gz
+            dist/notarize-pending.json
           if-no-files-found: error
           retention-days: 14
+
+      - name: Queue notarization for the Ubuntu finisher
+        if: hashFiles('dist/notarize-pending.json') != ''
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash scripts/macos/publish_notarize_queue.sh dist/notarize-pending.json
 
   windows:
     needs: meta
@@ -355,6 +371,8 @@ jobs:
           set -euo pipefail
           echo "Release assets:"
           ls -lah artifacts/
+          # The pending record is an internal queue marker, not a public download.
+          find artifacts -name 'notarize-pending.json' -delete
           # Fail if nothing to publish
           test -n "$(find artifacts -type f | head -1)"
 
@@ -403,7 +421,7 @@ jobs:
 
             The macOS tarball and Windows zip of the raw install tree are uploaded alongside those installers.
 
-            macOS signing and notarization run only when the Apple secrets are configured. Without them the DMG is unsigned.
+            macOS signing runs only when the Apple secrets are configured. Without them the DMG is unsigned. When they are set, this asset is the signed DMG; Notarize finish staples it onto the same filename after Apple accepts (usually within one 15-minute check).
 
             Example:
             ```

@@ -52,6 +52,10 @@ jobs:
         shell: bash
         run: python3 scripts/ci/check_codec_options.py
 
+      - name: Check notarization finisher
+        shell: bash
+        run: python3 scripts/macos/notarize_finish.py self-check
+
       - name: Require multi-platform release workflows
         shell: bash
         run: |
@@ -59,8 +63,10 @@ jobs:
           for f in \
             .github/workflows/build.yml \
             .github/workflows/auto-tag-release.yml \
+            .github/workflows/notarize-finish.yml \
             .github/workflows/pr-check.yml \
-            scripts/apply_release_version.py
+            scripts/apply_release_version.py \
+            scripts/macos/notarize_finish.py
           do
             test -f "$f" || { echo "missing $f" >&2; exit 1; }
             echo "ok $f"
