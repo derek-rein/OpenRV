@@ -134,8 +134,8 @@ The macOS job `timeout-minutes` is 360, which is the hosted-runner cap. A long c
 
 `scripts/windows/openrv.iss` (Inno Setup 6) is compiled in the Windows job after the zip of the install tree.
 
-- Installs the `_install` tree to `C:\Program Files\DerekVFX\Open RV`
-- Publisher **DerekVFX**
+- Installs the `_install` tree to `C:\Program Files\CompStart.pro\Open RV`
+- Publisher **CompStart.pro** (`https://compstart.pro`)
 - Start menu shortcut to `bin\rv.exe`, plus an uninstall shortcut
 - Optional desktop shortcut (unchecked by default)
 - Optional file associations for `.exr`, `.dpx`, `.mov`, `.mp4`, and `.rv` (unchecked by default), removed on uninstall

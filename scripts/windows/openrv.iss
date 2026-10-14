@@ -19,11 +19,11 @@
 AppId={{A7E3C1D4-6B58-4F0A-9C21-8E5D2F7A1B34}
 AppName=Open RV
 AppVersion={#AppVersion}
-AppPublisher=DerekVFX
-AppPublisherURL=https://github.com/derek-rein/OpenRV
+AppPublisher=CompStart.pro
+AppPublisherURL=https://compstart.pro
 AppSupportURL=https://github.com/derek-rein/OpenRV
 AppUpdatesURL=https://github.com/derek-rein/OpenRV/releases
-DefaultDirName={autopf}\DerekVFX\Open RV
+DefaultDirName={autopf}\CompStart.pro\Open RV
 DefaultGroupName=Open RV
 DisableProgramGroupPage=no
 LicenseFile=INSTALLER_LICENSE.txt

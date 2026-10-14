@@ -1,5 +1,5 @@
 Open RV for Windows
-Publisher: DerekVFX
+Publisher: CompStart.pro
 
 This installer packages an Open RV build configured with -DRV_ENABLE_ALL_CODECS=ON.
 
