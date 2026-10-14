@@ -115,6 +115,8 @@ IF(RV_TARGET_LINUX
 ENDIF()
 INCLUDE(imath)
 INCLUDE(zlib)
+INCLUDE(bsd_media_codecs)
+INCLUDE(hw_encode_headers)
 INCLUDE(ffmpeg)
 INCLUDE(doctest)
 INCLUDE(jpegturbo) # jpegturbo huge advantage over jpeg is that it does come with CMake support!

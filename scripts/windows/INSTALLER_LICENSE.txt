@@ -7,12 +7,15 @@ By installing this software you agree to the terms below.
 1. Open RV
 Open RV is licensed under the Apache License 2.0. A copy of that license is
 available at https://www.apache.org/licenses/LICENSE-2.0. This installer is a
-playback and review build. It does not include FFmpeg encoders.
+playback and review build. It includes license-compatible FFmpeg encoders
+(FFmpeg's own encoders, BSD libvpx and libaom, and hardware encoders the
+platform build supported). It does not include GPL encoders.
 
 2. LGPL components
 FFmpeg is LGPL v2.1 or later and is shipped as shared libraries. This build
 does not pass --enable-gpl and does not pass --enable-nonfree. It is not
-linked to x264, x265, libvpx, or libaom. Qt and LibRaw are LGPL components.
+linked to x264 or x265. libvpx (BSD) and libaom (BSD 2-Clause) may be linked.
+Qt and LibRaw are LGPL components.
 Corresponding source for the LGPL pieces is available from the Open RV source
 repository that produced this build. See THIRD_PARTY_NOTICES.txt.
 

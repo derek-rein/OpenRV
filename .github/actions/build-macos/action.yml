@@ -178,7 +178,7 @@ runs:
           ./_build/RV_DEPS_*
           ./_build/cmake/dependencies
           ./_build/_deps
-        key: macos-${{ inputs.arch-type }}-${{ inputs.vfx-platform }}-${{ hashFiles('cmake/defaults/CYCOMMON.cmake', 'cmake/defaults/rv_codec_options.cmake', 'cmake/dependencies/ffmpeg.cmake') }}-codecs-v2-dependencies
+        key: macos-${{ inputs.arch-type }}-${{ inputs.vfx-platform }}-${{ hashFiles('cmake/defaults/CYCOMMON.cmake', 'cmake/defaults/rv_codec_options.cmake', 'cmake/dependencies/ffmpeg.cmake', 'cmake/dependencies/bsd_media_codecs.cmake', 'cmake/dependencies/hw_encode_headers.cmake', 'cmake/dependencies/normalize_codec_libs.cmake') }}-codecs-v3-dependencies
 
     # Modest persistent ccache. The Qt and dependency caches are the large ones;
     # 500M covers the OpenRV objects across a codec-flag change without filling
@@ -239,4 +239,4 @@ runs:
           ./_build/RV_DEPS_*
           ./_build/cmake/dependencies
           ./_build/_deps
-        key: macos-${{ inputs.arch-type }}-${{ inputs.vfx-platform }}-${{ hashFiles('cmake/defaults/CYCOMMON.cmake', 'cmake/defaults/rv_codec_options.cmake', 'cmake/dependencies/ffmpeg.cmake') }}-codecs-v2-dependencies
+        key: macos-${{ inputs.arch-type }}-${{ inputs.vfx-platform }}-${{ hashFiles('cmake/defaults/CYCOMMON.cmake', 'cmake/defaults/rv_codec_options.cmake', 'cmake/dependencies/ffmpeg.cmake', 'cmake/dependencies/bsd_media_codecs.cmake', 'cmake/dependencies/hw_encode_headers.cmake', 'cmake/dependencies/normalize_codec_libs.cmake') }}-codecs-v3-dependencies

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Checks for the playback-only codec preset and the private runtime copy rules."""
+"""Checks for the license-compatible codec preset and the private runtime copy rules."""
 
 from __future__ import annotations
 

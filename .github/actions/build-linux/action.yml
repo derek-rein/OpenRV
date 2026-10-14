@@ -102,6 +102,10 @@ runs:
         fi
       shell: bash
 
+    - name: Install optional VAAPI headers
+      run: dnf install -y libva-devel libdrm-devel || echo "VAAPI headers not available; FFmpeg will leave VAAPI off"
+      shell: bash
+
     - name: Install other system dependencies
       if: ${{ inputs.rocky-version == '9' }}
       run: |

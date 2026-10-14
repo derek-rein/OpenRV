@@ -1,6 +1,6 @@
 # Release codecs, signing, and installers
 
-This fork's **Multi-platform Build** (`workflow_dispatch` or a `vX.Y.Z` tag) configures every platform with `-DRV_ENABLE_ALL_CODECS=ON`. A local build without that flag keeps upstream's defaults: patent-restricted FFmpeg decoders stay disabled. Neither build passes `--enable-gpl` or `--enable-nonfree`, and neither links x264, x265, libvpx, or libaom.
+This fork's **Multi-platform Build** (`workflow_dispatch` or a `vX.Y.Z` tag) configures every platform with `-DRV_ENABLE_ALL_CODECS=ON`. A local build without that flag keeps upstream's defaults: patent-restricted FFmpeg decoders and encoders stay disabled. Neither build passes `--enable-gpl` or `--enable-nonfree`, and neither links x264 or x265. The release build does link BSD libvpx and libaom.
 
 The canonical lists live in `cmake/defaults/rv_codec_options.cmake`. `scripts/ci/check_codec_options.py` fails if a new name is added to `cmake/dependencies/ffmpeg.cmake` or `src/lib/image/mio_ffmpeg/init.cpp` and the preset does not mention it.
 
@@ -30,13 +30,26 @@ The VP9 **parser** is left enabled when `vp9` is in that list. Without the parse
 
 ### FFmpeg encoders
 
-`RV_ENABLE_ALL_CODECS` forces `RV_FFMPEG_DISABLE_ENCODERS`, which passes `--disable-encoders`. OpenRV is a review and playback tool. The writer whitelist in `MovieFFMpeg.cpp` is empty, so `rvio` does not advertise an FFmpeg encoder. H.264 and HEVC decode stay on the built-in decoders. AV1 decode stays on dav1d. The GPL filter `geq` stays disabled.
+GPL encoders are the ones that are dropped. x264 and x265 are not built, and configure refuses `--enable-gpl`, `--enable-nonfree`, `--enable-libx264`, and `--enable-libx265`. The GPL filter `geq` stays disabled. FFmpeg keeps the rest of its encoder set.
 
-`cmake/dependencies/ffmpeg.cmake` refuses to configure if the flag list contains `--enable-gpl`, `--enable-nonfree`, `--enable-libx264`, `--enable-libx265`, `--enable-libvpx`, or `--enable-libaom`. `scripts/ci/check_codec_options.py` checks the same thing, and checks that every decoder name is still in the preset.
+With `RV_ENABLE_ALL_CODECS`, the patent encoder list is turned back on: `aac`, `aac_mf`, `dnxhd`, `dvvideo`, `prores`, `qtrle`, `vp9_qsv`, `vp9_vaapi`. FFmpeg's other LGPL encoders (including `prores_ks`, `prores_aw`, `mjpeg`, PCM, and rawvideo) stay at FFmpeg's defaults. `cmake/dependencies/bsd_media_codecs.cmake` builds libvpx 1.15.2 (BSD) and libaom 3.12.1 (BSD-2-Clause, encoder only) and passes `--enable-libvpx` and `--enable-libaom`. AV1 decode stays on dav1d. H.264 and HEVC decode stay on the built-in decoders.
 
-### Apple VideoToolbox
+`MovieFFMpeg.cpp` advertises every encoder the build actually contains except the GPL names (`libx264`, `libx264rgb`, `libx265`, `libxvid`, `libxavs`, `libxavs2`). A name that was not compiled does not show up.
 
-On Apple, `RV_FFMPEG_USE_VIDEOTOOLBOX` is forced `ON`, and FFmpeg is given `--enable-videotoolbox`. That is the hardware ProRes/H.264 path. It does not replace the need for Apple's ProRes SDK on Linux or Windows.
+`scripts/ci/check_codec_options.py` checks the decoder and encoder presets, the BSD flags, and the GPL refusal.
+
+### Hardware encoders
+
+These are compiled when the build can see them. A missing SDK does not fail configure.
+
+| Path | When it is built |
+|------|------------------|
+| VideoToolbox (`h264_videotoolbox`, `hevc_videotoolbox`, `prores_videotoolbox`) | Apple. `RV_FFMPEG_USE_VIDEOTOOLBOX` is forced `ON` and FFmpeg gets `--enable-videotoolbox`. This does not replace Apple's ProRes SDK on Linux or Windows |
+| Media Foundation (`h264_mf`, `hevc_mf`, `av1_mf`, `aac_mf`) | Windows, when the Windows SDK headers are present. FFmpeg autodetects this |
+| NVENC (`h264_nvenc`, `hevc_nvenc`, `av1_nvenc`) | Windows and Linux. `hw_encode_headers.cmake` installs MIT ffnvcodec 12.2.72.0 headers. FFmpeg dlopens the NVIDIA driver; the headers are not shipped. macOS configure disables NVENC |
+| AMF (`h264_amf`, `hevc_amf`, `av1_amf`) | Windows. MIT AMF 1.4.36 headers are installed for the compiler only |
+| QSV (`h264_qsv`, `hevc_qsv`, `av1_qsv`, `vp9_qsv`) | When `pkg-config` finds `libvpl` >= 2.6 (`--enable-libvpl`) or `libmfx` (`--enable-libmfx`). CI does not vendor oneVPL |
+| VAAPI (`h264_vaapi`, `hevc_vaapi`, `av1_vaapi`, `vp9_vaapi`) | Linux release builds omit `--disable-vaapi`, so FFmpeg turns VAAPI on if libva is installed. The Linux job installs `libva-devel` when the package exists. Other platforms keep `--disable-vaapi` |
 
 ### OpenEXR and OpenImageIO
 
@@ -59,13 +72,13 @@ JPEG (libjpeg-turbo), PNG, TIFF, OpenJPEG, OpenJPH (HTJ2K), WebP, LibRaw/camera 
 
 This is a description of the flags, not legal advice. CompStart.pro should have counsel review a build before public redistribution.
 
-**LGPL / Apache.** OpenRV is Apache-2.0. FFmpeg in this build is the LGPL v2.1+ configuration: shared libraries, no `--enable-gpl`, no `--enable-nonfree`, no GPL codec libraries. Qt and LibRaw are also LGPL. The installer shows `scripts/windows/INSTALLER_LICENSE.txt`. The About dialog labels FFmpeg as LGPL v2.1+.
+**LGPL / Apache.** OpenRV is Apache-2.0. FFmpeg in this build is the LGPL v2.1+ configuration: shared libraries, no `--enable-gpl`, no `--enable-nonfree`, no GPL codec libraries. libvpx (BSD) and libaom (BSD-2-Clause) are linked into that LGPL FFmpeg. Qt and LibRaw are also LGPL. The installer shows `scripts/windows/INSTALLER_LICENSE.txt`. The About dialog labels FFmpeg as LGPL v2.1+ and lists libvpx and libaom when those versions were set.
 
 **Not FFmpeg "nonfree".** `--enable-nonfree` allows external libraries whose licenses forbid redistribution (the usual example is fdk-aac). This fork does not pass it. The OpenRV variable name `RV_FFMPEG_NON_FREE_*` is the project's own patent list, not that configure flag.
 
 **Patents.** Enabling the decoders above does not grant a patent license. H.264, H.265/HEVC, AAC, AC-3, MPEG-2, and DNxHD/DNxHR are widely treated as patent-encumbered. Distributing a binary that decodes them can require a license from the relevant pool (Via LA, Dolby, Avid, and others) depending on country and use. VP9 and AV1 decode are included as well.
 
-**dav1d** is BSD 2-Clause and is the AV1 decoder. It does not pull the binary under the GPL.
+**dav1d** is BSD 2-Clause and is the AV1 decoder. libaom is built with its decoder off, so it does not replace dav1d. Neither pulls the binary under the GPL.
 
 ## Follow-ups (login-gated SDKs — not downloaded)
 

@@ -170,12 +170,15 @@ LIST(APPEND RV_FFMPEG_COMMON_CONFIG_OPTIONS "--disable-iconv")
 LIST(APPEND RV_FFMPEG_COMMON_CONFIG_OPTIONS "--disable-outdevs")
 LIST(APPEND RV_FFMPEG_COMMON_CONFIG_OPTIONS "--disable-programs")
 LIST(APPEND RV_FFMPEG_COMMON_CONFIG_OPTIONS "--disable-large-tests")
-LIST(APPEND RV_FFMPEG_COMMON_CONFIG_OPTIONS "--disable-vaapi")
-LIST(APPEND RV_FFMPEG_COMMON_CONFIG_OPTIONS "--disable-doc")
-IF(RV_FFMPEG_DISABLE_ENCODERS)
-  LIST(APPEND RV_FFMPEG_COMMON_CONFIG_OPTIONS "--disable-encoders")
-  MESSAGE(STATUS "FFmpeg encoders disabled")
+# Linux release builds leave VAAPI to FFmpeg's autodetect (libva present -> on).
+# Forcing --enable-vaapi would fail configure on a machine without libva.
+# Other platforms, and a configure without RV_ENABLE_ALL_CODECS, keep it off.
+IF(NOT RV_ENABLE_ALL_CODECS OR NOT RV_TARGET_LINUX)
+  LIST(APPEND RV_FFMPEG_COMMON_CONFIG_OPTIONS "--disable-vaapi")
 ENDIF()
+LIST(APPEND RV_FFMPEG_COMMON_CONFIG_OPTIONS "--disable-doc")
+# Media Foundation, NVENC, and AMF stay on autodetect. Do not pass
+# --disable-encoders: that would drop LGPL and BSD encoders along with GPL ones.
 IF(RV_TARGET_WINDOWS)
   LIST(APPEND RV_FFMPEG_COMMON_CONFIG_OPTIONS "--toolchain=msvc")
 ENDIF()
@@ -318,6 +321,33 @@ LIST(REMOVE_DUPLICATES RV_FFMPEG_EXTRA_C_OPTIONS)
 LIST(REMOVE_DUPLICATES RV_FFMPEG_EXTRA_LIBPATH_OPTIONS)
 LIST(REMOVE_DUPLICATES RV_FFMPEG_EXTERNAL_LIBS)
 
+# QSV needs Intel oneVPL or the older Media SDK. Enable it only when the
+# library is already on the machine so a missing SDK does not fail configure.
+FIND_PROGRAM(
+  RV_PKG_CONFIG
+  NAMES pkg-config
+        pkgconf
+)
+IF(RV_PKG_CONFIG)
+  EXECUTE_PROCESS(
+    COMMAND ${RV_PKG_CONFIG} --atleast-version=2.6 libvpl
+    RESULT_VARIABLE _rv_libvpl_rc
+  )
+  IF(_rv_libvpl_rc EQUAL 0)
+    LIST(APPEND RV_FFMPEG_EXTERNAL_LIBS "--enable-libvpl")
+    MESSAGE(STATUS "FFmpeg QSV enabled via libvpl")
+  ELSE()
+    EXECUTE_PROCESS(
+      COMMAND ${RV_PKG_CONFIG} --exists libmfx
+      RESULT_VARIABLE _rv_libmfx_rc
+    )
+    IF(_rv_libmfx_rc EQUAL 0)
+      LIST(APPEND RV_FFMPEG_EXTERNAL_LIBS "--enable-libmfx")
+      MESSAGE(STATUS "FFmpeg QSV enabled via libmfx")
+    ENDIF()
+  ENDIF()
+ENDIF()
+
 SET(_rv_ffmpeg_configure_flags
     ${RV_FFMPEG_COMMON_CONFIG_OPTIONS} ${RV_FFMPEG_CONFIG_OPTIONS} ${RV_FFMPEG_EXTERNAL_LIBS}
 )
@@ -325,7 +355,7 @@ FOREACH(
   _rv_ffmpeg_flag IN
   LISTS _rv_ffmpeg_configure_flags
 )
-  IF("${_rv_ffmpeg_flag}" MATCHES "--enable-gpl|--enable-nonfree|--enable-libx264|--enable-libx265|--enable-libvpx|--enable-libaom")
+  IF("${_rv_ffmpeg_flag}" MATCHES "--enable-gpl|--enable-nonfree|--enable-libx264|--enable-libx265")
     MESSAGE(FATAL_ERROR "Refusing FFmpeg configure flag ${_rv_ffmpeg_flag}")
   ENDIF()
 ENDFOREACH()
@@ -359,6 +389,12 @@ SET(_ffmpeg_extra_pkgconfig_dirs
 )
 IF(RV_CONAN_CMAKE_PREFIX_PATH)
   LIST(APPEND _ffmpeg_extra_pkgconfig_dirs "${RV_CONAN_CMAKE_PREFIX_PATH}")
+ENDIF()
+IF(RV_BSD_CODEC_PKGCONFIG_DIRS)
+  LIST(APPEND _ffmpeg_extra_pkgconfig_dirs ${RV_BSD_CODEC_PKGCONFIG_DIRS})
+ENDIF()
+IF(RV_HW_ENCODE_PKGCONFIG_DIRS)
+  LIST(APPEND _ffmpeg_extra_pkgconfig_dirs ${RV_HW_ENCODE_PKGCONFIG_DIRS})
 ENDIF()
 RV_BUILD_PKG_CONFIG_PATH(_ffmpeg_pkg_config_path EXTRA_DIRS ${_ffmpeg_extra_pkgconfig_dirs})
 

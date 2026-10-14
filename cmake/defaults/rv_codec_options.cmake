@@ -8,8 +8,9 @@
 # Default stays OFF so a plain upstream-style configure keeps the
 # patent-restricted FFmpeg decoders disabled.
 # This fork does not link GPL libraries and does not pass --enable-gpl or --enable-nonfree.
-OPTION(RV_ENABLE_ALL_CODECS "Enable every playback decoder that does not need a login-gated SDK" OFF)
-OPTION(RV_FFMPEG_DISABLE_ENCODERS "Pass --disable-encoders to FFmpeg (playback-only build)" OFF)
+# License-compatible encoders stay on: FFmpeg's own encoders, BSD libvpx/libaom,
+# and hardware encoders the platform can build.
+OPTION(RV_ENABLE_ALL_CODECS "Enable every license-compatible codec that does not need a login-gated SDK" OFF)
 
 # Names match cmake/dependencies/ffmpeg.cmake (NON_FREE_*_TO_DISABLE) plus the
 # application-level gates in src/lib/image/mio_ffmpeg/init.cpp. Anything in the
@@ -45,23 +46,26 @@ SET(_RV_ALL_NONFREE_DECODERS
     "vp9_v4l2m2m"
 )
 
-# Playback does not advertise or enable encoders. The list stays empty so
-# check_codec_options.py can see that the release preset opts out.
+# Names match NON_FREE_ENCODERS_TO_DISABLE in cmake/dependencies/ffmpeg.cmake.
+# These are patent gates inside OpenRV, not FFmpeg's --enable-nonfree.
 SET(_RV_ALL_NONFREE_ENCODERS
-    ""
+    "aac"
+    "aac_mf"
+    "dnxhd"
+    "dvvideo"
+    "prores"
+    "qtrle"
+    "vp9_qsv"
+    "vp9_vaapi"
 )
 
 IF(RV_ENABLE_ALL_CODECS)
-  SET(RV_FFMPEG_DISABLE_ENCODERS
-      ON
-      CACHE BOOL "Pass --disable-encoders to FFmpeg (playback-only build)" FORCE
-  )
   SET(RV_FFMPEG_NON_FREE_DECODERS_TO_ENABLE
       "${_RV_ALL_NONFREE_DECODERS}"
       CACHE STRING "FFmpeg decoders OpenRV otherwise disables" FORCE
   )
   SET(RV_FFMPEG_NON_FREE_ENCODERS_TO_ENABLE
-      ""
+      "${_RV_ALL_NONFREE_ENCODERS}"
       CACHE STRING "FFmpeg encoders OpenRV otherwise disables" FORCE
   )
   # VideoToolbox is an Apple framework. Forcing it ON on other platforms does nothing useful.
@@ -73,5 +77,5 @@ IF(RV_ENABLE_ALL_CODECS)
   ENDIF()
   MESSAGE(STATUS "RV_ENABLE_ALL_CODECS=ON")
   MESSAGE(STATUS "  non-free decoders: ${RV_FFMPEG_NON_FREE_DECODERS_TO_ENABLE}")
-  MESSAGE(STATUS "  encoders disabled: ${RV_FFMPEG_DISABLE_ENCODERS}")
+  MESSAGE(STATUS "  non-free encoders: ${RV_FFMPEG_NON_FREE_ENCODERS_TO_ENABLE}")
 ENDIF()

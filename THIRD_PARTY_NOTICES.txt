@@ -10,8 +10,16 @@ Open RV
 FFmpeg
   License: LGPL v2.1 or later
   Built as shared libraries. This build does not pass --enable-gpl or
-  --enable-nonfree and does not link x264, x265, libvpx, or libaom.
+  --enable-nonfree and does not link x264 or x265.
   https://ffmpeg.org/legal.html
+
+libvpx
+  License: BSD
+  VP8/VP9 encode.
+
+libaom
+  License: BSD 2-Clause
+  AV1 encode. AV1 decode uses dav1d.
 
 Qt (and PySide)
   License: LGPL v3

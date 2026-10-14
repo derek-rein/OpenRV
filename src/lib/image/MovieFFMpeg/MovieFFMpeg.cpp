@@ -693,9 +693,23 @@ namespace TwkMovie
 #endif
         };
 
-        // Playback-only build: do not advertise encoders. rvio export therefore
-        // has no FFmpeg codecs to offer. Decoder names stay in supportedDecodingCodecsArray.
-        const char* supportedEncodingCodecsArray[] = {0};
+        // GPL encoders require --enable-gpl and are not linked. Every other
+        // encoder FFmpeg actually built is advertised. Hardware names simply
+        // do not appear when that platform did not compile them.
+        const char* gplEncodingCodecsArray[] = {"libx264", "libx264rgb", "libx265", "libxvid", "libxavs", "libxavs2", 0};
+
+        bool isGplEncoder(const char* name)
+        {
+            const string codec(name);
+            for (const char** c = gplEncodingCodecsArray; *c; c++)
+            {
+                if (codec == *c)
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
 
         const char* metadataFieldsArray[] = {"album",       "album_artist", "artist",     "author", "comment",  "composer", "copyright",
                                              "description", "encoder",      "episode_id", "genre",  "grouping", "lyrics",   "network",
@@ -5871,12 +5885,6 @@ namespace TwkMovie
         // don't allow
         //
 
-        map<string, int> supported;
-        for (const char** c = supportedEncodingCodecsArray; *c; c++)
-        {
-            supported[*c] = 1;
-        }
-
         StringPairVector video;
         StringPairVector audio;
         MFFormatMap formats = getFormats();
@@ -5908,7 +5916,7 @@ namespace TwkMovie
             while ((codec = av_codec_iterate(&iter)))
             {
                 if (codecs.find(codec->name) == codecs.end() && codecIsAllowed(codec->name, false) && av_codec_is_encoder(codec) != 0
-                    && supported.find(codec->name) != supported.end())
+                    && !isGplEncoder(codec->name))
                 {
                     string prefix = "";
                     StringPair desc(codec->name, codec->long_name);
