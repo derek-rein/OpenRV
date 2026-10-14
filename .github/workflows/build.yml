@@ -177,6 +177,8 @@ jobs:
           cache-qt: 'true'
           # Lean Qt set: only modules OpenRV links (skips debug_info + unused kits).
           rocky_qt6_modules: 'qt5compat qtimageformats qtmultimedia qtpositioning qtwebchannel qtwebengine qtwebsockets'
+          braw-sdk-read-token: ${{ secrets.BRAW_SDK_READ_TOKEN }}
+          r3d-sdk-read-token: ${{ secrets.R3D_SDK_READ_TOKEN }}
 
       - name: Package install tree
         run: |
@@ -230,6 +232,8 @@ jobs:
           # Lean Qt set: only modules OpenRV links (skips debug_info + unused kits).
           # Qt 6 clang_64 is universal arm64+x86_64 prebuilt — no source build.
           macos_qt6_modules: 'qt5compat qtimageformats qtmultimedia qtpositioning qtwebchannel qtwebengine qtwebsockets'
+          braw-sdk-read-token: ${{ secrets.BRAW_SDK_READ_TOKEN }}
+          r3d-sdk-read-token: ${{ secrets.R3D_SDK_READ_TOKEN }}
 
       - name: Sign, build DMG, and submit for notarization
         shell: bash
@@ -304,6 +308,8 @@ jobs:
           cache-qt: 'true'
           # Lean Qt set: only modules OpenRV links (skips debug_info + unused kits).
           windows_qt6_modules: 'qt5compat qtimageformats qtmultimedia qtpositioning qtwebchannel qtwebengine qtwebsockets'
+          braw-sdk-read-token: ${{ secrets.BRAW_SDK_READ_TOKEN }}
+          r3d-sdk-read-token: ${{ secrets.R3D_SDK_READ_TOKEN }}
 
       - name: Package install tree
         run: |

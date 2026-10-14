@@ -16,8 +16,15 @@ ROOT = Path(__file__).resolve().parents[2]
 FFMPEG = ROOT / "cmake" / "dependencies" / "ffmpeg.cmake"
 OPTIONS = ROOT / "cmake" / "defaults" / "rv_codec_options.cmake"
 INIT = ROOT / "src" / "lib" / "image" / "mio_ffmpeg" / "init.cpp"
-GPL = ROOT / "cmake" / "dependencies" / "gpl_media_codecs.cmake"
 OIIO = ROOT / "cmake" / "dependencies" / "oiio.cmake"
+FORBIDDEN_FLAGS = (
+    "--enable-gpl",
+    "--enable-nonfree",
+    "--enable-libx264",
+    "--enable-libx265",
+    "--enable-libvpx",
+    "--enable-libaom",
+)
 
 
 def quoted_block(text: str, start_marker: str) -> list[str]:
@@ -43,47 +50,59 @@ def preset_names(text: str, variable: str) -> set[str]:
     return set(quoted_block(text, f"SET({variable}"))
 
 
+def active_lines(text: str) -> list[str]:
+    lines = []
+    for line in text.splitlines():
+        code = line.split("#", 1)[0]
+        if "MATCHES" in code or "FATAL_ERROR" in code:
+            continue
+        lines.append(code)
+    return lines
+
+
 def main() -> None:
     ffmpeg = FFMPEG.read_text(encoding="utf-8")
     options = OPTIONS.read_text(encoding="utf-8")
     init = INIT.read_text(encoding="utf-8")
-    gpl = GPL.read_text(encoding="utf-8")
     oiio = OIIO.read_text(encoding="utf-8")
 
     decoders = set(quoted_block(ffmpeg, "SET(NON_FREE_DECODERS_TO_DISABLE"))
     decoders.update(re.findall(r'LIST\(APPEND NON_FREE_DECODERS_TO_DISABLE "([^"]+)"\)', ffmpeg))
-    encoders = set(quoted_block(ffmpeg, "SET(NON_FREE_ENCODERS_TO_DISABLE"))
-    encoders.update(re.findall(r'LIST\(APPEND NON_FREE_ENCODERS_TO_DISABLE "([^"]+)"\)', ffmpeg))
     app_decoders = set(re.findall(r"__FFMPEG_ENABLE_NON_FREE_DECODER_([A-Za-z0-9_]+)", init))
 
     enabled_decoders = preset_names(options, "_RV_ALL_NONFREE_DECODERS")
-    enabled_encoders = preset_names(options, "_RV_ALL_NONFREE_ENCODERS")
+    enabled_encoders = {name for name in preset_names(options, "_RV_ALL_NONFREE_ENCODERS") if name}
 
     missing_decoders = sorted((decoders | app_decoders) - enabled_decoders)
-    missing_encoders = sorted(encoders - enabled_encoders)
-    if missing_decoders or missing_encoders:
-        print("codec preset is missing names:", file=sys.stderr)
+    if missing_decoders or enabled_encoders:
+        print("codec preset is wrong:", file=sys.stderr)
         for name in missing_decoders:
             print(f"  decoder {name}", file=sys.stderr)
-        for name in missing_encoders:
-            print(f"  encoder {name}", file=sys.stderr)
+        for name in sorted(enabled_encoders):
+            print(f"  encoder still enabled {name}", file=sys.stderr)
         sys.exit(1)
 
-    configure_flags = set()
-    for line in gpl.splitlines():
-        configure_flags.update(re.findall(r"--[A-Za-z0-9_=+-]+", line.split("#", 1)[0]))
-    for flag in ("--enable-gpl", "--enable-libx264", "--enable-libx265", "--enable-libvpx", "--enable-libaom"):
-        if flag not in configure_flags:
-            raise SystemExit(f"gpl_media_codecs.cmake does not pass {flag}")
-    if "--enable-nonfree" in configure_flags:
-        raise SystemExit("refusing --enable-nonfree; that flag makes redistribution illegal")
+    gpl_cmake = ROOT / "cmake" / "dependencies" / "gpl_media_codecs.cmake"
+    if gpl_cmake.exists():
+        raise SystemExit("gpl_media_codecs.cmake must not exist")
+
+    for path in (FFMPEG, OPTIONS):
+        for line in active_lines(path.read_text(encoding="utf-8")):
+            for flag in FORBIDDEN_FLAGS:
+                if flag in line:
+                    raise SystemExit(f"{path.name} still contains {flag}")
+
+    if "--disable-encoders" not in ffmpeg or "--disable-filter=geq" not in ffmpeg:
+        raise SystemExit("ffmpeg.cmake must disable encoders and the GPL geq filter")
+    if "RV_FFMPEG_DISABLE_ENCODERS" not in options:
+        raise SystemExit("release preset must force encoders off")
     if "RV_ENABLE_ALL_CODECS" not in oiio or "USE_OPENEXR=ON" not in oiio:
         raise SystemExit("oiio.cmake does not force format plugins on for RV_ENABLE_ALL_CODECS")
     if "USE_GIF=OFF" not in oiio:
         raise SystemExit("GIF must stay off until giflib is vendored")
 
-    print(f"decoders {len(enabled_decoders)} encoders {len(enabled_encoders)}")
-    print("codec preset covers ffmpeg.cmake, mio_ffmpeg/init.cpp, and GPL external libs")
+    print(f"decoders {len(enabled_decoders)} encoders 0")
+    print("codec preset keeps every decoder and refuses GPL / nonfree / encoder libraries")
 
 
 if __name__ == "__main__":

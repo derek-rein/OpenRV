@@ -1,6 +1,6 @@
 # Release codecs, signing, and installers
 
-This fork's **Multi-platform Build** (`workflow_dispatch` or a `vX.Y.Z` tag) configures every platform with `-DRV_ENABLE_ALL_CODECS=ON`. A local build without that flag keeps upstream's defaults: patent-restricted FFmpeg decoders stay disabled, and GPL libraries are not linked.
+This fork's **Multi-platform Build** (`workflow_dispatch` or a `vX.Y.Z` tag) configures every platform with `-DRV_ENABLE_ALL_CODECS=ON`. A local build without that flag keeps upstream's defaults: patent-restricted FFmpeg decoders stay disabled. Neither build passes `--enable-gpl` or `--enable-nonfree`, and neither links x264, x265, libvpx, or libaom.
 
 The canonical lists live in `cmake/defaults/rv_codec_options.cmake`. `scripts/ci/check_codec_options.py` fails if a new name is added to `cmake/dependencies/ffmpeg.cmake` or `src/lib/image/mio_ffmpeg/init.cpp` and the preset does not mention it.
 
@@ -28,28 +28,11 @@ The VP9 **parser** is left enabled when `vp9` is in that list. Without the parse
 
 `h264` (decode) and `libdav1d` (AV1 decode) were already enabled and stay enabled.
 
-### FFmpeg encoders (`RV_FFMPEG_NON_FREE_ENCODERS_TO_ENABLE`)
+### FFmpeg encoders
 
-`aac`, `aac_mf`, `dnxhd`, `dvvideo`, `prores`, `qtrle`, `vp9_qsv`, `vp9_vaapi`.
+`RV_ENABLE_ALL_CODECS` forces `RV_FFMPEG_DISABLE_ENCODERS`, which passes `--disable-encoders`. OpenRV is a review and playback tool. The writer whitelist in `MovieFFMpeg.cpp` is empty, so `rvio` does not advertise an FFmpeg encoder. H.264 and HEVC decode stay on the built-in decoders. AV1 decode stays on dav1d. The GPL filter `geq` stays disabled.
 
-The writer whitelist in `MovieFFMpeg.cpp` also advertises `libx264`, `libx265`, `libvpx`, `libvpx-vp9`, `libaom-av1`, `aac`, `dnxhd`, `prores`, `prores_aw`, `prores_ks`, and `qtrle`. A name is shown only when FFmpeg was actually built with that encoder.
-
-### GPL and BSD libraries (`RV_FFMPEG_ENABLE_GPL`)
-
-`RV_ENABLE_ALL_CODECS` forces this on. `cmake/dependencies/gpl_media_codecs.cmake` builds and statically links:
-
-| Library | Version pinned in-tree | License | What it adds |
-|---------|------------------------|---------|--------------|
-| x264 | stable snapshot `31e19f92` | GPL-2.0-or-later | H.264 encode, 8-bit and 10-bit (`--bit-depth=all`) |
-| x265 | 3.4 (newest tag on the videolan GitHub mirror) | GPL-2.0-or-later | H.265 **8-bit** encode. 10-bit HEVC **decode** is the built-in `hevc` decoder, not x265 |
-| libvpx | 1.15.2 | BSD | VP8/VP9 encode, VP9 high bit depth |
-| libaom | 3.12.1 | BSD-2-Clause | AV1 encode. AV1 decode stays on dav1d |
-
-FFmpeg is configured with `--enable-gpl --enable-libx264 --enable-libx265 --enable-libvpx --enable-libaom --pkg-config-flags=--static`. The GPL filter `geq` is no longer disabled in that build.
-
-On Apple Silicon, x265 3.4 is built with assembly off (that release's assembly is x86).
-
-A CMake configure on Linux creates the four ExternalProject targets and their pkg-config files. The libraries themselves were not compiled in this change. On Windows, x264's configure is invoked with `CC=cl`, and libvpx uses `--target=x86_64-win64-vs17` (its Makefile calls MSBuild). Those two Windows paths are untested until the first Windows dispatch. Linux and macOS use the autotools/CMake defaults. `pkg-config` is installed on the Linux and Windows jobs so FFmpeg's configure can see the `.pc` files (`--pkg-config-flags=--static`).
+`cmake/dependencies/ffmpeg.cmake` refuses to configure if the flag list contains `--enable-gpl`, `--enable-nonfree`, `--enable-libx264`, `--enable-libx265`, `--enable-libvpx`, or `--enable-libaom`. `scripts/ci/check_codec_options.py` checks the same thing, and checks that every decoder name is still in the preset.
 
 ### Apple VideoToolbox
 
@@ -74,15 +57,15 @@ JPEG (libjpeg-turbo), PNG, TIFF, OpenJPEG, OpenJPH (HTJ2K), WebP, LibRaw/camera 
 
 ## Licensing consequences
 
-This is a description of the flags, not legal advice. Derek / Medeu Global LLC should have counsel review a build before public redistribution.
+This is a description of the flags, not legal advice. CompStart.pro should have counsel review a build before public redistribution.
 
-**GPL.** x264 and x265 are GPL-2.0-or-later. FFmpeg `--enable-gpl` makes that FFmpeg build GPL. OpenRV itself is Apache-2.0. Apache-2.0 code can be combined into a GPL-2.0-or-later work and the **binary** then has to be distributed under the GPL (source offer, no extra restrictions). You cannot ship that binary under Apache-2.0 only. The installer shows `scripts/windows/INSTALLER_LICENSE.txt` for this reason. The About dialog labels FFmpeg as GPL when x264 or x265 was linked.
+**LGPL / Apache.** OpenRV is Apache-2.0. FFmpeg in this build is the LGPL v2.1+ configuration: shared libraries, no `--enable-gpl`, no `--enable-nonfree`, no GPL codec libraries. Qt and LibRaw are also LGPL. The installer shows `scripts/windows/INSTALLER_LICENSE.txt`. The About dialog labels FFmpeg as LGPL v2.1+.
 
-**Not FFmpeg "nonfree".** `--enable-nonfree` is a different switch. It allows external libraries whose licenses forbid redistribution (the usual example is fdk-aac). This fork does **not** pass it. The OpenRV variable name `RV_FFMPEG_NON_FREE_*` is the project's own patent list, not that configure flag.
+**Not FFmpeg "nonfree".** `--enable-nonfree` allows external libraries whose licenses forbid redistribution (the usual example is fdk-aac). This fork does not pass it. The OpenRV variable name `RV_FFMPEG_NON_FREE_*` is the project's own patent list, not that configure flag.
 
-**Patents.** Enabling the decoders and encoders above does not grant a patent license. H.264, H.265/HEVC, AAC, AC-3, MPEG-2, and DNxHD/DNxHR are widely treated as patent-encumbered. Distributing a binary that encodes or decodes them can require a license from the relevant pool (Via LA, Dolby, Avid, and others) depending on country and use. VP9 and AV1 are generally the less encumbered choice; the build enables them too, it does not remove the others.
+**Patents.** Enabling the decoders above does not grant a patent license. H.264, H.265/HEVC, AAC, AC-3, MPEG-2, and DNxHD/DNxHR are widely treated as patent-encumbered. Distributing a binary that decodes them can require a license from the relevant pool (Via LA, Dolby, Avid, and others) depending on country and use. VP9 and AV1 decode are included as well.
 
-**BSD pieces.** dav1d, libvpx, and libaom do not themselves pull the binary under the GPL. Linking them next to x264 still does, because of x264/x265.
+**dav1d** is BSD 2-Clause and is the AV1 decoder. It does not pull the binary under the GPL.
 
 ## Follow-ups (login-gated SDKs — not downloaded)
 
@@ -92,14 +75,34 @@ These exist as CMake hooks but need a zip or installer from a vendor account. CI
 |------|------------|
 | `RV_DEPS_APPLE_PRORES_SDK_ZIP_PATH` | Apple ProRes decoder SDK (email `prores@apple.com`). Required for the official ProRes path on Linux/Windows. FFmpeg's `prores` decoder above is the non-SDK path and is not Apple's implementation. On Apple Silicon, VideoToolbox is the supported hardware path |
 | `RV_DEPS_BMD_DECKLINK_SDK_ZIP_PATH` | Blackmagic Desktop Video / DeckLink output |
-| Blackmagic RAW (BRAW) | No CMake option in this tree |
-| RED R3D (`RV_DEPS_R3DSDK_VERSION`) | Referenced by the About dialog only. No SDK build in this tree |
+| compatible with Blackmagic RAW | Optional. See below. Skipped when `BRAW_SDK_READ_TOKEN` is unset |
+| supports R3D files | Optional. See below. Skipped when `R3D_SDK_READ_TOKEN` is unset |
 | ARRI RAW (`RV_DEPS_ARRIRAW_VERSION`) | Same: About dialog only |
 | NDI | `FindNDI_SDK.cmake` looks for an SDK installed on the machine. The SDK download is account-gated |
 | fdk-aac | Would need `--enable-nonfree` and is intentionally not added |
-| SVT-AV1 | Faster AV1 encoder than libaom. Not wired; libaom covers AV1 encode |
 | giflib | Would allow `USE_GIF=ON` in OIIO |
-| x265 10-bit / 4.x | The videolan GitHub mirror's newest tag is 3.4 (8-bit). Newer tarballs on Bitbucket are not anonymously fetchable from CI |
+
+## Optional camera playback
+
+Movie plugins `mio_braw` and `mio_r3d` are always built. They load a small project-owned bridge (`src/lib/image/vendor_bridge`, MIT) only when the vendor runtime was staged. Without that runtime, opening a clip reports that playback is not installed and the rest of the build still succeeds.
+
+CI fetches the SDK only when the matching secret is set:
+
+| Secret | Repository | Release | Asset |
+|--------|------------|---------|-------|
+| `BRAW_SDK_READ_TOKEN` | `derek-rein/braw-sdk-private` | `sdk-6.0` | `BlackmagicRAWSDK-6.0-full.tar.gz` |
+| `R3D_SDK_READ_TOKEN` | `derek-rein/r3d-sdk-private` | `sdk-9.2.1` | `R3DSDKv9_2_1-full.tar.gz` |
+
+`scripts/sdk/fetch_braw_sdk.py` and `scripts/sdk/fetch_r3d_sdk.py` take `--optional` and print `SKIP` when the token is absent. They do not log archive contents. `scripts/sdk/build_*_bridge.py` compiles the bridge against the local SDK and copies **only** vendor dynamic libraries into `build/<name>/redistributable`. `scripts/sdk/stage_private_codecs.py` then installs that runtime into a private app directory:
+
+| Platform | compatible with Blackmagic RAW | supports R3D files |
+|----------|--------------------------------|--------------------|
+| macOS | `Contents/Frameworks/braw` | `Contents/MacOS/r3d` |
+| Linux and Windows | `lib/private/braw` | `lib/private/r3d` |
+
+Headers, static libraries, samples, and docs are refused. The bridge object code is ours; the vendor libraries stay unmodified except that macOS codesign must sign them so the app bundle can be notarized. Set `OPENRV_R3D_PIPELINE=log3g10` for the log primary development path. The default is the clip's stored look, which is the review image.
+
+The plugins read picture only. Audio in those files is not decoded. `THIRD_PARTY_NOTICES.txt` and the installer EULA (`scripts/windows/INSTALLER_LICENSE.txt`, also staged as `EULA.txt`) cover the LGPL pieces and the runtime terms: no further redistribution, no reverse engineering, no warranty, and a liability limit. Do not use vendor marks beyond "compatible with Blackmagic RAW" and "supports R3D files".
 
 Encrypted RTMP protocols (`ffrtmpcrypt`, `rtmpe`, `rtmpte`) stay disabled. They are not media codecs.
 

@@ -26,6 +26,12 @@ inputs:
     required: false
     # Cache prebuilt Qt from aqt (jurplel/install-qt-action). Huge win vs re-download.
     default: 'true'
+  braw-sdk-read-token:
+    required: false
+    default: ''
+  r3d-sdk-read-token:
+    required: false
+    default: ''
 
 runs:
   using: "composite"
@@ -176,6 +182,13 @@ runs:
         echo "export PATH=\"/c/Users/runneradmin/.cargo/bin:\$PATH\"" >> ~/.bash_profile
         sccache --version || echo "WARNING: sccache not found in PATH"
       shell: msys2 {0}
+
+    - name: Fetch optional playback SDKs
+      shell: bash
+      env:
+        BRAW_SDK_READ_TOKEN: ${{ inputs.braw-sdk-read-token }}
+        R3D_SDK_READ_TOKEN: ${{ inputs.r3d-sdk-read-token }}
+      run: bash scripts/sdk/fetch_optional_sdks.sh
 
     - name: Configure OpenRV
       run: |

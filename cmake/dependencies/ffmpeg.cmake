@@ -172,6 +172,10 @@ LIST(APPEND RV_FFMPEG_COMMON_CONFIG_OPTIONS "--disable-programs")
 LIST(APPEND RV_FFMPEG_COMMON_CONFIG_OPTIONS "--disable-large-tests")
 LIST(APPEND RV_FFMPEG_COMMON_CONFIG_OPTIONS "--disable-vaapi")
 LIST(APPEND RV_FFMPEG_COMMON_CONFIG_OPTIONS "--disable-doc")
+IF(RV_FFMPEG_DISABLE_ENCODERS)
+  LIST(APPEND RV_FFMPEG_COMMON_CONFIG_OPTIONS "--disable-encoders")
+  MESSAGE(STATUS "FFmpeg encoders disabled")
+ENDIF()
 IF(RV_TARGET_WINDOWS)
   LIST(APPEND RV_FFMPEG_COMMON_CONFIG_OPTIONS "--toolchain=msvc")
 ENDIF()
@@ -296,12 +300,8 @@ IF(NOT RV_FFMPEG_CONFIG_OPTIONS)
     MESSAGE(STATUS "FFmpeg parser vp9 enabled")
   ENDIF()
 
-  # vf_geq is GPL. It stays disabled unless this build already opted into --enable-gpl.
-  IF(NOT RV_FFMPEG_ENABLE_GPL)
-    LIST(APPEND _disabled_filters "--disable-filter=geq")
-  ELSE()
-    MESSAGE(STATUS "FFmpeg filter geq enabled (GPL build)")
-  ENDIF()
+  # vf_geq is GPL. This fork never enables it.
+  LIST(APPEND _disabled_filters "--disable-filter=geq")
 
   LIST(APPEND _disabled_protocols "--disable-protocol=ffrtmpcrypt")
   LIST(APPEND _disabled_protocols "--disable-protocol=rtmpe")
@@ -317,6 +317,18 @@ LIST(REMOVE_DUPLICATES RV_FFMPEG_CONFIG_OPTIONS)
 LIST(REMOVE_DUPLICATES RV_FFMPEG_EXTRA_C_OPTIONS)
 LIST(REMOVE_DUPLICATES RV_FFMPEG_EXTRA_LIBPATH_OPTIONS)
 LIST(REMOVE_DUPLICATES RV_FFMPEG_EXTERNAL_LIBS)
+
+SET(_rv_ffmpeg_configure_flags
+    ${RV_FFMPEG_COMMON_CONFIG_OPTIONS} ${RV_FFMPEG_CONFIG_OPTIONS} ${RV_FFMPEG_EXTERNAL_LIBS}
+)
+FOREACH(
+  _rv_ffmpeg_flag IN
+  LISTS _rv_ffmpeg_configure_flags
+)
+  IF("${_rv_ffmpeg_flag}" MATCHES "--enable-gpl|--enable-nonfree|--enable-libx264|--enable-libx265|--enable-libvpx|--enable-libaom")
+    MESSAGE(FATAL_ERROR "Refusing FFmpeg configure flag ${_rv_ffmpeg_flag}")
+  ENDIF()
+ENDFOREACH()
 
 # On macOS, externally-provided shared libraries may use @rpath install names. FFmpeg's configure compiles and RUNS small test binaries linked against these
 # libs; without an LC_RPATH in the test binary, dyld can't locate them at runtime (SIGABRT / Abort trap: 6). DYLD_LIBRARY_PATH cannot be used because macOS dyld
@@ -347,9 +359,6 @@ SET(_ffmpeg_extra_pkgconfig_dirs
 )
 IF(RV_CONAN_CMAKE_PREFIX_PATH)
   LIST(APPEND _ffmpeg_extra_pkgconfig_dirs "${RV_CONAN_CMAKE_PREFIX_PATH}")
-ENDIF()
-IF(RV_GPL_CODEC_PKGCONFIG_DIRS)
-  LIST(APPEND _ffmpeg_extra_pkgconfig_dirs ${RV_GPL_CODEC_PKGCONFIG_DIRS})
 ENDIF()
 RV_BUILD_PKG_CONFIG_PATH(_ffmpeg_pkg_config_path EXTRA_DIRS ${_ffmpeg_extra_pkgconfig_dirs})
 

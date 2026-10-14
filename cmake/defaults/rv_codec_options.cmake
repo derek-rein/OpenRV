@@ -6,9 +6,10 @@
 
 # Release builds of this fork pass -DRV_ENABLE_ALL_CODECS=ON.
 # Default stays OFF so a plain upstream-style configure keeps the
-# patent-restricted FFmpeg decoders disabled and does not link GPL libraries.
-OPTION(RV_ENABLE_ALL_CODECS "Enable every codec switch that does not need a login-gated SDK" OFF)
-OPTION(RV_FFMPEG_ENABLE_GPL "Build FFmpeg with --enable-gpl and link x264, x265, libvpx, and libaom" OFF)
+# patent-restricted FFmpeg decoders disabled.
+# This fork does not link GPL libraries and does not pass --enable-gpl or --enable-nonfree.
+OPTION(RV_ENABLE_ALL_CODECS "Enable every playback decoder that does not need a login-gated SDK" OFF)
+OPTION(RV_FFMPEG_DISABLE_ENCODERS "Pass --disable-encoders to FFmpeg (playback-only build)" OFF)
 
 # Names match cmake/dependencies/ffmpeg.cmake (NON_FREE_*_TO_DISABLE) plus the
 # application-level gates in src/lib/image/mio_ffmpeg/init.cpp. Anything in the
@@ -44,28 +45,23 @@ SET(_RV_ALL_NONFREE_DECODERS
     "vp9_v4l2m2m"
 )
 
+# Playback does not advertise or enable encoders. The list stays empty so
+# check_codec_options.py can see that the release preset opts out.
 SET(_RV_ALL_NONFREE_ENCODERS
-    "aac"
-    "aac_mf"
-    "dnxhd"
-    "dvvideo"
-    "prores"
-    "qtrle"
-    "vp9_qsv"
-    "vp9_vaapi"
+    ""
 )
 
 IF(RV_ENABLE_ALL_CODECS)
-  SET(RV_FFMPEG_ENABLE_GPL
+  SET(RV_FFMPEG_DISABLE_ENCODERS
       ON
-      CACHE BOOL "Build FFmpeg with --enable-gpl and link x264, x265, libvpx, and libaom" FORCE
+      CACHE BOOL "Pass --disable-encoders to FFmpeg (playback-only build)" FORCE
   )
   SET(RV_FFMPEG_NON_FREE_DECODERS_TO_ENABLE
       "${_RV_ALL_NONFREE_DECODERS}"
       CACHE STRING "FFmpeg decoders OpenRV otherwise disables" FORCE
   )
   SET(RV_FFMPEG_NON_FREE_ENCODERS_TO_ENABLE
-      "${_RV_ALL_NONFREE_ENCODERS}"
+      ""
       CACHE STRING "FFmpeg encoders OpenRV otherwise disables" FORCE
   )
   # VideoToolbox is an Apple framework. Forcing it ON on other platforms does nothing useful.
@@ -77,6 +73,5 @@ IF(RV_ENABLE_ALL_CODECS)
   ENDIF()
   MESSAGE(STATUS "RV_ENABLE_ALL_CODECS=ON")
   MESSAGE(STATUS "  non-free decoders: ${RV_FFMPEG_NON_FREE_DECODERS_TO_ENABLE}")
-  MESSAGE(STATUS "  non-free encoders: ${RV_FFMPEG_NON_FREE_ENCODERS_TO_ENABLE}")
-  MESSAGE(STATUS "  GPL external codecs (x264, x265, libvpx, libaom): ${RV_FFMPEG_ENABLE_GPL}")
+  MESSAGE(STATUS "  encoders disabled: ${RV_FFMPEG_DISABLE_ENCODERS}")
 ENDIF()

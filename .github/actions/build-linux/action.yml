@@ -26,6 +26,12 @@ inputs:
     required: false
     # Cache prebuilt Qt from aqt (jurplel/install-qt-action). Huge win vs re-download.
     default: 'true'
+  braw-sdk-read-token:
+    required: false
+    default: ''
+  r3d-sdk-read-token:
+    required: false
+    default: ''
 
 runs:
   using: "composite"
@@ -70,7 +76,7 @@ runs:
           if dnf install -y epel-release && \
              dnf config-manager --set-enabled ${{ inputs.extra_repo }} devel && \
              dnf groupinstall "Development Tools" -y && \
-             dnf install -y alsa-lib-devel autoconf automake avahi-compat-libdns_sd-devel bison bzip2-devel cmake-gui curl-devel flex freetype-devel gcc gcc-c++ git libXcomposite libXi-devel libaio-devel libffi-devel nasm ncurses-devel nss libtool libxkbcommon libXcomposite libXdamage libXrandr libXtst libXcursor meson openssl-devel patch pkgconf-pkg-config pulseaudio-libs pulseaudio-libs-glib2 ocl-icd ocl-icd-devel opencl-headers qt5-qtbase-devel readline-devel sqlite-devel systemd-devel tcl-devel tcsh tk-devel yasm zip zlib-devel wget patchelf pcsc-lite libxkbfile perl-IPC-Cmd perl-Time-Piece && \
+             dnf install -y alsa-lib-devel autoconf automake avahi-compat-libdns_sd-devel bison bzip2-devel cmake-gui curl-devel flex freetype-devel gcc gcc-c++ git libXcomposite libXi-devel libaio-devel libffi-devel libuuid-devel nasm ncurses-devel nss libtool libxkbcommon libXcomposite libXdamage libXrandr libXtst libXcursor meson openssl-devel patch pkgconf-pkg-config pulseaudio-libs pulseaudio-libs-glib2 ocl-icd ocl-icd-devel opencl-headers qt5-qtbase-devel readline-devel sqlite-devel systemd-devel tcl-devel tcsh tk-devel yasm zip zlib-devel wget patchelf pcsc-lite libxkbfile perl-IPC-Cmd perl-Time-Piece && \
              dnf install -y libX11-devel libXext-devel libXrender-devel libXrandr-devel libXcursor-devel libXi-devel libXxf86vm-devel libxkbcommon-devel && \
              dnf install -y xz-devel mesa-libGLU mesa-libGLU-devel && \
              if [ "${{ inputs.rocky-version }}" = "9" ]; then \
@@ -257,6 +263,13 @@ runs:
         key: rocky-${{ inputs.rocky-version }}-${{ inputs.vfx-platform }}-${{ inputs.build-type }}-codecs
         max-size: 500M
         verbose: 2
+
+    - name: Fetch optional playback SDKs
+      shell: bash
+      env:
+        BRAW_SDK_READ_TOKEN: ${{ inputs.braw-sdk-read-token }}
+        R3D_SDK_READ_TOKEN: ${{ inputs.r3d-sdk-read-token }}
+      run: bash scripts/sdk/fetch_optional_sdks.sh
 
     - name: Configure OpenRV
       run: |

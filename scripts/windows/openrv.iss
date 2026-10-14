@@ -48,7 +48,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional icons:"; Flags: unchecked
-Name: "fileassoc"; Description: "Associate Open RV with .exr, .dpx, .mov, .mp4, and .rv files"; GroupDescription: "File associations:"; Flags: unchecked
+Name: "fileassoc"; Description: "Associate Open RV with .exr, .dpx, .mov, .mp4, .braw, .r3d, and .rv files"; GroupDescription: "File associations:"; Flags: unchecked
 
 [Files]
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -78,6 +78,16 @@ Root: HKA; Subkey: "Software\Classes\.mp4"; ValueType: string; ValueName: ""; Va
 Root: HKA; Subkey: "Software\Classes\OpenRV.mp4"; ValueType: string; ValueName: ""; ValueData: "MPEG-4 movie"; Flags: uninsdeletekey; Tasks: fileassoc
 Root: HKA; Subkey: "Software\Classes\OpenRV.mp4\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\bin\rv.exe,0"; Tasks: fileassoc
 Root: HKA; Subkey: "Software\Classes\OpenRV.mp4\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\bin\rv.exe"" ""%1"""; Tasks: fileassoc
+
+Root: HKA; Subkey: "Software\Classes\.braw"; ValueType: string; ValueName: ""; ValueData: "OpenRV.braw"; Flags: uninsdeletevalue; Tasks: fileassoc
+Root: HKA; Subkey: "Software\Classes\OpenRV.braw"; ValueType: string; ValueName: ""; ValueData: "compatible with Blackmagic RAW"; Flags: uninsdeletekey; Tasks: fileassoc
+Root: HKA; Subkey: "Software\Classes\OpenRV.braw\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\bin\rv.exe,0"; Tasks: fileassoc
+Root: HKA; Subkey: "Software\Classes\OpenRV.braw\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\bin\rv.exe"" ""%1"""; Tasks: fileassoc
+
+Root: HKA; Subkey: "Software\Classes\.r3d"; ValueType: string; ValueName: ""; ValueData: "OpenRV.r3d"; Flags: uninsdeletevalue; Tasks: fileassoc
+Root: HKA; Subkey: "Software\Classes\OpenRV.r3d"; ValueType: string; ValueName: ""; ValueData: "supports R3D files"; Flags: uninsdeletekey; Tasks: fileassoc
+Root: HKA; Subkey: "Software\Classes\OpenRV.r3d\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\bin\rv.exe,0"; Tasks: fileassoc
+Root: HKA; Subkey: "Software\Classes\OpenRV.r3d\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\bin\rv.exe"" ""%1"""; Tasks: fileassoc
 
 Root: HKA; Subkey: "Software\Classes\.rv"; ValueType: string; ValueName: ""; ValueData: "OpenRV.session"; Flags: uninsdeletevalue; Tasks: fileassoc
 Root: HKA; Subkey: "Software\Classes\OpenRV.session"; ValueType: string; ValueName: ""; ValueData: "Open RV session"; Flags: uninsdeletekey; Tasks: fileassoc

@@ -115,8 +115,6 @@ IF(RV_TARGET_LINUX
 ENDIF()
 INCLUDE(imath)
 INCLUDE(zlib)
-# Before FFmpeg so --enable-gpl / libx264 / libx265 / libvpx / libaom are registered.
-INCLUDE(gpl_media_codecs)
 INCLUDE(ffmpeg)
 INCLUDE(doctest)
 INCLUDE(jpegturbo) # jpegturbo huge advantage over jpeg is that it does come with CMake support!

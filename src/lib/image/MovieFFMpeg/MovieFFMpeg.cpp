@@ -693,12 +693,9 @@ namespace TwkMovie
 #endif
         };
 
-        // Whitelist of encoders the writer will advertise. av_codec_iterate still
-        // has to find the codec, so names whose libraries were not linked (for
-        // example libx265 in a non-GPL build) simply do not appear.
-        const char* supportedEncodingCodecsArray[] = {"dvvideo",     "libx264", "libx265", "libvpx",    "libvpx-vp9", "libaom-av1", "aac",
-                                                      "dnxhd",       "prores",  "prores_aw", "prores_ks", "qtrle",      "mjpeg",      "pcm_s16be",
-                                                      "rawvideo",    0};
+        // Playback-only build: do not advertise encoders. rvio export therefore
+        // has no FFmpeg codecs to offer. Decoder names stay in supportedDecodingCodecsArray.
+        const char* supportedEncodingCodecsArray[] = {0};
 
         const char* metadataFieldsArray[] = {"album",       "album_artist", "artist",     "author", "comment",  "composer", "copyright",
                                              "description", "encoder",      "episode_id", "genre",  "grouping", "lyrics",   "network",
@@ -5859,10 +5856,6 @@ namespace TwkMovie
         eparams.push_back(MovieIO::Parameter("duration", "integer literal duration value", ""));
         eparams.push_back(MovieIO::Parameter("pix_fmt", "string video pixel format (i.e. yuv420p)", ""));
         eparams.push_back(MovieIO::Parameter("sample_fmt", "string audio sample format (i.e. s16)", ""));
-        eparams.push_back(MovieIO::Parameter("libx264autoresize",
-                                             "integer value of 1 will automatically alter "
-                                             "dimensions for H.264 encoding",
-                                             ""));
         collectParameters(avformat_get_class(), &eparams, &dparams, "", "f:");
 
         ParameterVector veparams;
