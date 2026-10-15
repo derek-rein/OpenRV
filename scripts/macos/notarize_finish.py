@@ -201,8 +201,10 @@ def download_asset(repo: str, name: str, dest_dir: Path) -> Path:
     return path
 
 
-def delete_asset(repo: str, asset_id: object) -> None:
-    run_gh(["api", "-X", "DELETE", f"repos/{repo}/releases/assets/{asset_id}"])
+def delete_asset(repo: str, name: str) -> None:
+    # gh release view --json assets returns GraphQL node ids (RA_...), which
+    # the REST assets endpoint rejects with 404, so delete by name instead.
+    run_gh(["release", "delete-asset", QUEUE_TAG, name, "--repo", repo, "--yes"])
 
 
 def asset_id_by_name(assets: list[dict[str, object]], name: str) -> object | None:
@@ -355,7 +357,7 @@ def mark_done(repo: str, assets: list[dict[str, object]], record: dict[str, obje
         if asset_id is None:
             continue
         print(f"Removing queue asset {name}", flush=True)
-        delete_asset(repo, asset_id)
+        delete_asset(repo, name)
 
 
 def process_record(
