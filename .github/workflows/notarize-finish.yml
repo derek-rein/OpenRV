@@ -6,16 +6,12 @@
 #
 # Multi-platform Build dispatches this workflow right after it queues a
 # submission. One Ubuntu run then polls Apple every few minutes (up to
-# wait_minutes) until the queue is empty, instead of a cron every 15 minutes.
-# A cron every 6 hours stays as a safety net for anything left behind; with an
-# empty queue it exits in well under a minute. GitHub only runs the cron from
-# the default branch.
+# wait_minutes) until the queue is empty. No cron at all: if a dispatch is
+# ever missed, run this workflow manually (empty inputs = every pending marker).
 
 name: Notarize finish
 
 on:
-  schedule:
-    - cron: '23 */6 * * *'
   workflow_dispatch:
     inputs:
       submission_id:

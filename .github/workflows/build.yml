@@ -61,11 +61,13 @@ on:
         default: false
         type: boolean
 
-  # Tags only — do not run on branch pushes (those show up as pre-merge PR checks
-  # and burn ~2h × 3 OS before anyone has approved the PR).
+  # Builds run only on push to main (plus manual / auto-tag dispatch).
+  # No PR, tag or other-branch triggers.
   push:
-    tags:
-      - 'v*'
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
 
 concurrency:
   group: multi-platform-build-${{ github.workflow }}-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && inputs.tag || '' }}
@@ -283,7 +285,7 @@ jobs:
           gh workflow run notarize-finish.yml --repo "$GITHUB_REPOSITORY" \
             --ref "${{ github.event.repository.default_branch }}" \
             -f run_id="${{ github.run_id }}" -f wait_minutes=150 \
-            || echo "::warning::Could not dispatch notarize-finish.yml; the 6-hourly schedule will pick the submission up."
+            || echo "::warning::Could not dispatch notarize-finish.yml; run it manually to staple."
 
   windows:
     needs: meta
