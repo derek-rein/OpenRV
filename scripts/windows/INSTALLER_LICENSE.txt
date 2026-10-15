@@ -1,0 +1,47 @@
+Open RV for Windows
+Publisher: CompStart.pro
+https://compstart.pro
+
+By installing this software you agree to the terms below.
+
+1. Open RV
+Open RV is licensed under the Apache License 2.0. A copy of that license is
+available at https://www.apache.org/licenses/LICENSE-2.0. This installer is a
+playback and review build. It includes license-compatible FFmpeg encoders
+(FFmpeg's own encoders, BSD libvpx and libaom, and hardware encoders the
+platform build supported). It does not include GPL encoders.
+
+2. LGPL components
+FFmpeg is LGPL v2.1 or later and is shipped as shared libraries. This build
+does not pass --enable-gpl and does not pass --enable-nonfree. It is not
+linked to x264 or x265. libvpx (BSD) and libaom (BSD 2-Clause) may be linked.
+Qt and LibRaw are LGPL components.
+Corresponding source for the LGPL pieces is available from the Open RV source
+repository that produced this build. See THIRD_PARTY_NOTICES.txt.
+
+3. Patents
+Some decoders (including H.264, H.265/HEVC, AAC, AC-3, MPEG-2, and DNxHD) are
+widely treated as patent-encumbered. Installing this software does not grant
+those patent rights. This text is not legal advice.
+
+4. Optional R3D playback runtime
+If this copy includes a private r3d/ directory, that runtime supports R3D
+files and is not open source. You receive a license to use it only as part of
+this application. You may not redistribute it, publish it, or give it to
+anyone else separately from this application. You may not reverse engineer,
+decompile, or disassemble it except where a law forbids that limit. It is
+provided "as is", without warranty of any kind. Liability for that runtime is
+limited to the amount you paid for this application, or zero if you paid
+nothing, to the maximum extent the law allows. The authors are not liable for
+indirect, incidental, or consequential damages.
+
+5. Optional camera RAW playback runtime
+If this copy includes a private braw/ directory, that runtime is compatible
+with Blackmagic RAW. It is an unmodified vendor dynamic library stored only
+inside this application. The same no-redistribution, no-reverse-engineering,
+no-warranty, and liability-limit terms in section 4 apply to it. This
+application is not a product of that vendor.
+
+6. Other third parties
+Other components keep the licenses listed in THIRD_PARTY_NOTICES.txt and in
+the About dialog.

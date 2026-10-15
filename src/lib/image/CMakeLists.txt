@@ -64,3 +64,41 @@ ADD_SUBDIRECTORY(io_oiio)
 ADD_SUBDIRECTORY(mio_ffmpeg)
 ADD_SUBDIRECTORY(mio_stdinfb)
 ADD_SUBDIRECTORY(mio_mistika)
+ADD_SUBDIRECTORY(vendor_bridge)
+ADD_SUBDIRECTORY(MovieBraw)
+ADD_SUBDIRECTORY(MovieR3D)
+ADD_SUBDIRECTORY(mio_braw)
+ADD_SUBDIRECTORY(mio_r3d)
+
+FIND_PACKAGE(
+  Python3
+  COMPONENTS Interpreter
+  QUIET
+)
+IF(Python3_EXECUTABLE)
+  SET(_rv_python
+      "${Python3_EXECUTABLE}"
+  )
+ELSE()
+  SET(_rv_python
+      "python3"
+  )
+ENDIF()
+
+ADD_CUSTOM_TARGET(
+  stage_private_codecs ALL
+  COMMAND ${_rv_python} "${PROJECT_SOURCE_DIR}/scripts/sdk/stage_private_codecs.py" --stage-root "${RV_STAGE_ROOT_DIR}"
+  COMMENT "Stage optional camera playback runtimes"
+  VERBATIM
+)
+ADD_DEPENDENCIES(stage_private_codecs mio_braw mio_r3d)
+
+ADD_CUSTOM_TARGET(
+  stage_playback_notices ALL
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different "${PROJECT_SOURCE_DIR}/THIRD_PARTY_NOTICES.txt" "${RV_STAGE_RESOURCES_DIR}/THIRD_PARTY_NOTICES.txt"
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different "${PROJECT_SOURCE_DIR}/scripts/windows/INSTALLER_LICENSE.txt" "${RV_STAGE_RESOURCES_DIR}/EULA.txt"
+  COMMENT "Stage third-party notices and EULA"
+  VERBATIM
+)
+
+ADD_DEPENDENCIES(main_executable stage_private_codecs stage_playback_notices)

@@ -28,6 +28,8 @@ compile_commands.json
 cmake-*/*
 /*build*/
 _install/*
+.braw-sdk/
+.r3d-sdk/
 .venv/*
 
 # while it can be useful, we are not planning of using it for now

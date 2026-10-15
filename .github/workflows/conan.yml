@@ -2,14 +2,14 @@
 # Conan packaging path (ASWF experimental). Not used by Multi-platform Build
 # release binaries (those use aqt + traditional CMake deps).
 #
-# Daily schedule is ASWF-only — forks that only ship prebuilt packages should
-# not burn Actions minutes on this matrix.
+# Upstream schedules this at midnight (`0 0 * * *`): a Conan install/build
+# matrix for Rocky 8/9, macOS arm64, and Windows. Jobs are owner-gated, so a
+# cron run on this fork would skip and bill nothing, but it would still queue.
+# The cron is removed. workflow_dispatch remains for someone actually working
+# on the Conan packaging path. Release binaries do not use this workflow.
 name: Conan-OpenRV
 
 on:
-  schedule:
-    # Midnight build every day (no-op on non-ASWF forks; see job guards below)
-    - cron: "0 0 * * *"
   pull_request:
     paths:
       - '.github/workflows/conan.yml'
@@ -31,8 +31,7 @@ env:
 jobs:
   rocky-linux:
     # Prebuilt Multi-platform Build packages do not use Conan. Keep the matrix
-    # on ASWF (or manual workflow_dispatch on a fork that is actually working
-    # on Conan packaging).
+    # on ASWF, or a manual workflow_dispatch when this fork is working on Conan.
     if: github.repository_owner == 'AcademySoftwareFoundation' || github.event_name == 'workflow_dispatch'
     name: 'Rocky Linux ${{ matrix.rocky-version }} ${{ matrix.vfx-platform }}
       <qt=${{ matrix.qt-version }},
@@ -59,7 +58,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # CY2024
+          # CY2025
           - os: "ubuntu-latest"
             rocky-version: "8"
             image: "amd64/rockylinux:8"
@@ -68,7 +67,7 @@ jobs:
             qt-version: "6.5.3"
             cmake-version: "3.31.6"
             python-version: "3.11.8"
-            vfx-platform: "CY2024"
+            vfx-platform: "CY2025"
             extra_repo: "powertools"
             conan-profile: "x86_64_rocky8"
 
@@ -80,7 +79,7 @@ jobs:
             qt-version: "6.5.3"
             cmake-version: "3.31.6"
             python-version: "3.11.8"
-            vfx-platform: "CY2024"
+            vfx-platform: "CY2025"
             extra_repo: "crb"
             conan-profile: "x86_64_rocky9"
             
@@ -342,7 +341,7 @@ jobs:
           $CONAN_EXECUTABLE remote add aswftesting https://linuxfoundation.jfrog.io/artifactory/api/conan/aswf-conan-dev --index 0
 
       - name: Export OpenRVCore recipe to Conan's cache
-        if: ${{ matrix.vfx-platform == 'CY2024' }}
+        if: ${{ matrix.vfx-platform == 'CY2025' }}
         run: |
           export QT_HOME=/__w/OpenRV/OpenRV/deps/Qt/${{ matrix.qt-version}}/gcc_64
           echo "QT_HOME=$QT_HOME" >> $GITHUB_ENV
@@ -411,7 +410,7 @@ jobs:
             #qt-version-short: "6.5"
             #python-version: "3.11"
             #cmake-version: "3.31.6"
-            #vfx-platform: "CY2024"
+            #vfx-platform: "CY2025"
           - os: "macos-14"
             arch-type: "arm64"
             build-type: "Release"
@@ -419,7 +418,7 @@ jobs:
             qt-version-short: "6.5"
             python-version: "3.11"
             cmake-version: "3.31.6"
-            vfx-platform: "CY2024"
+            vfx-platform: "CY2025"
 
     steps:
       - name: Check if it is a schedule job
@@ -534,7 +533,7 @@ jobs:
           /Users/runner/Library/Python/3.11/bin/conan remote add aswftesting https://linuxfoundation.jfrog.io/artifactory/api/conan/aswf-conan-dev --index 0
 
       - name: Export OpenRVCore recipe
-        if: ${{ matrix.vfx-platform == 'CY2024' }}
+        if: ${{ matrix.vfx-platform == 'CY2025' }}
         run: |
           /Users/runner/Library/Python/3.11/bin/conan export openrvcore-conanfile.py
 
@@ -585,7 +584,7 @@ jobs:
             qt-version: "6.5.3"
             python-version: "3.11"
             cmake-version: "3.31.6"
-            vfx-platform: "CY2024"
+            vfx-platform: "CY2025"
             msvc-component: "14.40.17.10.x86.x64"
             msvc-compiler: "14.40.33807"
 
@@ -787,7 +786,7 @@ jobs:
         shell: msys2 {0}
 
       - name: Export OpenRVCore recipe
-        if: ${{ matrix.vfx-platform == 'CY2024' }}
+        if: ${{ matrix.vfx-platform == 'CY2025' }}
         run: |
           conan export openrvcore-conanfile.py
         shell: msys2 {0}

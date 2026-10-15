@@ -128,6 +128,9 @@ namespace Rv
         connect(m_ui.exrNumThreadsEdit, SIGNAL(textChanged(const QString&)), this, SLOT(exrThreadNumChanged(const QString&)));
         setWindowTitle(UI_APPLICATION_NAME " Preferences");
 
+        // Auxiliary window: never keeps RV alive.
+        setAttribute(Qt::WA_QuitOnClose, false);
+
 #ifndef PLATFORM_DARWIN
         m_ui.appleClientStorageToggle->setEnabled(false);
 #endif
@@ -2970,13 +2973,8 @@ namespace Rv
         if (p.version != "")
             str << "<tr><td align=right> <b>Version</b> </td><td> " << p.version.toUtf8().data() << " </td></tr>";
 
-        if (p.requires != "")
-        str << "<tr><td align=right> <b>Requires</b> </td><td> "
-            << p.
-                   requires
-            .toUtf8()
-            .data()
-            << " </td></tr>";
+        if (p.requiresList != "")
+            str << "<tr><td align=right> <b>Requires</b> </td><td> " << p.requiresList.toUtf8().data() << " </td></tr>";
 
         if (p.rvversion != "")
             str << "<tr><td align=right> <b>RV Version</b> </td><td> " << p.rvversion.toUtf8().data() << " </td></tr>";
@@ -3000,20 +2998,13 @@ namespace Rv
         {
             str << "<li>" << p.modes[q].file.toUtf8().data() << "</li>\n";
 
-            if (p.modes[q].requires.size())
+            if (p.modes[q].requiresList.size())
             {
                 str << "\nRequires<ul>";
 
-                for (int i = 0; i < p.modes[q].requires.size(); i++)
+                for (int i = 0; i < p.modes[q].requiresList.size(); i++)
                 {
-                    str << "<li>"
-                        << p.modes[q]
-                               .
-                               requires[
-                                       i]
-                               .toUtf8()
-                               .data()
-                        << "</li>\n";
+                    str << "<li>" << p.modes[q].requiresList[i].toUtf8().data() << "</li>\n";
                 }
 
                 str << "</ul>\n";

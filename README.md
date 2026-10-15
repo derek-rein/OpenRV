@@ -24,8 +24,10 @@ Prebuilt **Release** packages from this fork ([derek-rein/OpenRV](https://github
 | Platform | Download |
 |----------|----------|
 | Linux x86_64 | [**tar.gz**](https://github.com/derek-rein/OpenRV/releases/latest/download/openrv-linux-x86_64.tar.gz) |
-| macOS Apple Silicon | [**tar.gz**](https://github.com/derek-rein/OpenRV/releases/latest/download/openrv-macos-arm64.tar.gz) |
-| Windows x64 | [**zip**](https://github.com/derek-rein/OpenRV/releases/latest/download/openrv-windows-x86_64.zip) |
+| macOS Apple Silicon | [**DMG**](https://github.com/derek-rein/OpenRV/releases/latest/download/openrv-macos-arm64.dmg) |
+| Windows x64 | [**installer**](https://github.com/derek-rein/OpenRV/releases/latest/download/openrv-windows-x86_64-setup.exe) |
+
+Release builds enable every codec switch that does not need a login-gated SDK, including GPL H.264/H.265 encoders. What that means for redistribution is in [release codecs and signing](docs/build_system/release_codecs_and_signing.md).
 
 All releases: [github.com/derek-rein/OpenRV/releases](https://github.com/derek-rein/OpenRV/releases)
 
@@ -71,7 +73,7 @@ gh workflow run "Multi-platform Build" --ref main -f tag=vX.Y.Z -f platforms=all
 
 Full multi-platform builds run **only after merge** (or manual Actions dispatch / human tag push) — never on the PR itself. The PR only needs the light **PR Check** gate.
 
-**Note:** The scheduled **Conan-OpenRV** workflow is ASWF experimental packaging. Prebuilt packages from this fork do **not** use Conan; the schedule is no-op on non-ASWF forks.
+**Note:** Upstream's midnight **OpenRV** and **Conan-OpenRV** crons are disabled on this fork so they are not queued. Both were already owner-gated to AcademySoftwareFoundation (a skipped run bills nothing). Prebuilt packages do **not** use the Conan workflow. Dispatch **Multi-platform Build** and pick `linux`, `macos`, or `windows` when you only need one platform. macOS notarization is submitted and the runner exits; **Notarize finish** (Ubuntu, every 15 minutes) staples the DMG after Apple accepts and replaces the release asset. An empty queue is a no-op.
 
 ## Cloning the repository
 

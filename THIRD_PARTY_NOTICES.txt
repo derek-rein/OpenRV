@@ -1,0 +1,58 @@
+Open RV third-party notices
+Publisher: CompStart.pro
+
+This build is for review and playback.
+
+Open RV
+  License: Apache-2.0
+  https://www.apache.org/licenses/LICENSE-2.0
+
+FFmpeg
+  License: LGPL v2.1 or later
+  Built as shared libraries. This build does not pass --enable-gpl or
+  --enable-nonfree and does not link x264 or x265.
+  https://ffmpeg.org/legal.html
+
+libvpx
+  License: BSD
+  VP8/VP9 encode.
+
+libaom
+  License: BSD 2-Clause
+  AV1 encode. AV1 decode uses dav1d.
+
+Qt (and PySide)
+  License: LGPL v3
+  https://www.qt.io/licensing/
+
+dav1d
+  License: BSD 2-Clause
+  AV1 decode.
+
+LibRaw
+  License: LGPL v2.1 / CDDL
+
+Other libraries shipped with Open RV keep the licenses named in the About
+dialog (MIT, BSD, Apache-2.0, zlib, and similar).
+
+Optional playback runtimes
+  These are not part of the open-source tree. They are fetched at build time
+  only when a private read token is configured, and only the unmodified vendor
+  dynamic libraries are placed in a private application directory. Headers,
+  static libraries, samples, and documentation are not shipped.
+
+  compatible with Blackmagic RAW
+    Private directory: braw/
+    The application is not a Blackmagic product.
+
+  supports R3D files
+    Private directory: r3d/
+    The runtime is licensed for use inside this application only.
+    You may not redistribute that runtime, and you may not reverse engineer,
+    decompile, or disassemble it. It is provided without warranty. Liability
+    for that component is limited to the maximum extent the license allows.
+    The full terms presented at install time are in EULA.txt.
+
+Patent note
+  Decoding H.264, H.265/HEVC, AAC, AC-3, MPEG-2, or DNxHD/DNxHR may require a
+  patent license in your country. This notice is not legal advice.

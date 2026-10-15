@@ -693,7 +693,23 @@ namespace TwkMovie
 #endif
         };
 
-        const char* supportedEncodingCodecsArray[] = {"dvvideo", "libx264", "mjpeg", "pcm_s16be", "rawvideo", 0};
+        // GPL encoders require --enable-gpl and are not linked. Every other
+        // encoder FFmpeg actually built is advertised. Hardware names simply
+        // do not appear when that platform did not compile them.
+        const char* gplEncodingCodecsArray[] = {"libx264", "libx264rgb", "libx265", "libxvid", "libxavs", "libxavs2", 0};
+
+        bool isGplEncoder(const char* name)
+        {
+            const string codec(name);
+            for (const char** c = gplEncodingCodecsArray; *c; c++)
+            {
+                if (codec == *c)
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
 
         const char* metadataFieldsArray[] = {"album",       "album_artist", "artist",     "author", "comment",  "composer", "copyright",
                                              "description", "encoder",      "episode_id", "genre",  "grouping", "lyrics",   "network",
@@ -5854,10 +5870,6 @@ namespace TwkMovie
         eparams.push_back(MovieIO::Parameter("duration", "integer literal duration value", ""));
         eparams.push_back(MovieIO::Parameter("pix_fmt", "string video pixel format (i.e. yuv420p)", ""));
         eparams.push_back(MovieIO::Parameter("sample_fmt", "string audio sample format (i.e. s16)", ""));
-        eparams.push_back(MovieIO::Parameter("libx264autoresize",
-                                             "integer value of 1 will automatically alter "
-                                             "dimensions for H.264 encoding",
-                                             ""));
         collectParameters(avformat_get_class(), &eparams, &dparams, "", "f:");
 
         ParameterVector veparams;
@@ -5872,12 +5884,6 @@ namespace TwkMovie
         // Walk through all supported formats and codecs and filter out those we
         // don't allow
         //
-
-        map<string, int> supported;
-        for (const char** c = supportedEncodingCodecsArray; *c; c++)
-        {
-            supported[*c] = 1;
-        }
 
         StringPairVector video;
         StringPairVector audio;
@@ -5910,7 +5916,7 @@ namespace TwkMovie
             while ((codec = av_codec_iterate(&iter)))
             {
                 if (codecs.find(codec->name) == codecs.end() && codecIsAllowed(codec->name, false) && av_codec_is_encoder(codec) != 0
-                    && supported.find(codec->name) != supported.end())
+                    && !isGplEncoder(codec->name))
                 {
                     string prefix = "";
                     StringPair desc(codec->name, codec->long_name);
@@ -6080,11 +6086,11 @@ namespace TwkMovie
         formats["mp4"] = make_pair("MPEG-4 Movie Container", vidcap);
         formats["mpg"] = make_pair("MPEG Format", vidcap);
         formats["mxf"] = make_pair("Material eXchange Format", vidcap);
-        //    formats["ogv"]  = make_pair("OGG Video", vidcap);
-        //    formats["webm"] = make_pair("WEBM Video", vidcap);
+        formats["ogv"] = make_pair("OGG Video", vidcap);
+        formats["webm"] = make_pair("WEBM Video", vidcap);
 
         // Audio
-        //    formats["aac"]  = make_pair("Advanced Audio Codec", audcap);
+        formats["aac"] = make_pair("Advanced Audio Codec", audcap);
         formats["aif"] = make_pair("Apple AIFF audio file", audcap);
         formats["aifc"] = make_pair("Apple AIFC compressed audio file", audcap);
         formats["aiff"] = make_pair("Apple AIFF audio file", audcap);

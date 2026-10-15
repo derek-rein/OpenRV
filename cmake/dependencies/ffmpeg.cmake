@@ -170,8 +170,15 @@ LIST(APPEND RV_FFMPEG_COMMON_CONFIG_OPTIONS "--disable-iconv")
 LIST(APPEND RV_FFMPEG_COMMON_CONFIG_OPTIONS "--disable-outdevs")
 LIST(APPEND RV_FFMPEG_COMMON_CONFIG_OPTIONS "--disable-programs")
 LIST(APPEND RV_FFMPEG_COMMON_CONFIG_OPTIONS "--disable-large-tests")
-LIST(APPEND RV_FFMPEG_COMMON_CONFIG_OPTIONS "--disable-vaapi")
+# Linux release builds leave VAAPI to FFmpeg's autodetect (libva present -> on).
+# Forcing --enable-vaapi would fail configure on a machine without libva.
+# Other platforms, and a configure without RV_ENABLE_ALL_CODECS, keep it off.
+IF(NOT RV_ENABLE_ALL_CODECS OR NOT RV_TARGET_LINUX)
+  LIST(APPEND RV_FFMPEG_COMMON_CONFIG_OPTIONS "--disable-vaapi")
+ENDIF()
 LIST(APPEND RV_FFMPEG_COMMON_CONFIG_OPTIONS "--disable-doc")
+# Media Foundation, NVENC, and AMF stay on autodetect. Do not pass
+# --disable-encoders: that would drop LGPL and BSD encoders along with GPL ones.
 IF(RV_TARGET_WINDOWS)
   LIST(APPEND RV_FFMPEG_COMMON_CONFIG_OPTIONS "--toolchain=msvc")
 ENDIF()
@@ -193,11 +200,6 @@ IF(FALSE)
   LIST(APPEND RV_FFMPEG_COMMON_CONFIG_OPTIONS "--disable-stripping")
 ENDIF()
 
-# Controls the EXTERNALPROJECT_ADD/BUILD_ALWAYS option
-SET(${_force_rebuild}
-    FALSE
-)
-
 IF(RV_TARGET_APPLE_ARM64)
   SET(RV_FFMPEG_USE_VIDEOTOOLBOX_DEFAULT_VALUE
       ON
@@ -209,6 +211,16 @@ ELSE()
 ENDIF()
 
 OPTION(RV_FFMPEG_USE_VIDEOTOOLBOX "FFmpeg laveraging the VideoToolbox framework" ${RV_FFMPEG_USE_VIDEOTOOLBOX_DEFAULT_VALUE})
+
+# The option used to only define a C++ macro. Pass it through to FFmpeg itself on Apple.
+IF(RV_TARGET_DARWIN)
+  IF(RV_FFMPEG_USE_VIDEOTOOLBOX)
+    LIST(APPEND RV_FFMPEG_EXTERNAL_LIBS "--enable-videotoolbox")
+    MESSAGE(STATUS "FFmpeg VideoToolbox enabled")
+  ELSE()
+    LIST(APPEND RV_FFMPEG_EXTERNAL_LIBS "--disable-videotoolbox")
+  ENDIF()
+ENDIF()
 
 # Make a list of the Open RV's FFmpeg config options unless already customized. Note that a super project, a project consuming Open RV as a submodule, can
 # customize the FFmpeg config options via the RV_FFMPEG_CONFIG_OPTIONS cmake property.
@@ -284,8 +296,14 @@ IF(NOT RV_FFMPEG_CONFIG_OPTIONS)
     ENDIF()
   ENDFOREACH()
 
-  LIST(APPEND _disabled_parsers "--disable-parser=vp9")
+  # The VP9 parser is required to demux VP9. Keep it when the decoder is enabled.
+  IF(NOT "vp9" IN_LIST RV_FFMPEG_NON_FREE_DECODERS_TO_ENABLE)
+    LIST(APPEND _disabled_parsers "--disable-parser=vp9")
+  ELSE()
+    MESSAGE(STATUS "FFmpeg parser vp9 enabled")
+  ENDIF()
 
+  # vf_geq is GPL. This fork never enables it.
   LIST(APPEND _disabled_filters "--disable-filter=geq")
 
   LIST(APPEND _disabled_protocols "--disable-protocol=ffrtmpcrypt")
@@ -295,16 +313,6 @@ IF(NOT RV_FFMPEG_CONFIG_OPTIONS)
   SET(RV_FFMPEG_CONFIG_OPTIONS
       ${_disabled_decoders} ${_disabled_encoders} ${_disabled_filters} ${_disabled_parsers} ${_disabled_protocols}
   )
-
-  IF(NOT RV_FFMPEG_CONFIG_OPTIONS STREQUAL RV_FFMPEG_CONFIG_OPTIONS_CACHE)
-    SET(${_force_rebuild}
-        TRUE
-    )
-    SET(RV_FFMPEG_CONFIG_OPTIONS_CACHE
-        ${RV_FFMPEG_CONFIG_OPTIONS}
-        CACHE STRING "FFmpeg config options" FORCE
-    )
-  ENDIF()
 ENDIF()
 
 LIST(REMOVE_DUPLICATES RV_FFMPEG_DEPENDS)
@@ -312,6 +320,45 @@ LIST(REMOVE_DUPLICATES RV_FFMPEG_CONFIG_OPTIONS)
 LIST(REMOVE_DUPLICATES RV_FFMPEG_EXTRA_C_OPTIONS)
 LIST(REMOVE_DUPLICATES RV_FFMPEG_EXTRA_LIBPATH_OPTIONS)
 LIST(REMOVE_DUPLICATES RV_FFMPEG_EXTERNAL_LIBS)
+
+# QSV needs Intel oneVPL or the older Media SDK. Enable it only when the
+# library is already on the machine so a missing SDK does not fail configure.
+FIND_PROGRAM(
+  RV_PKG_CONFIG
+  NAMES pkg-config
+        pkgconf
+)
+IF(RV_PKG_CONFIG)
+  EXECUTE_PROCESS(
+    COMMAND ${RV_PKG_CONFIG} --atleast-version=2.6 libvpl
+    RESULT_VARIABLE _rv_libvpl_rc
+  )
+  IF(_rv_libvpl_rc EQUAL 0)
+    LIST(APPEND RV_FFMPEG_EXTERNAL_LIBS "--enable-libvpl")
+    MESSAGE(STATUS "FFmpeg QSV enabled via libvpl")
+  ELSE()
+    EXECUTE_PROCESS(
+      COMMAND ${RV_PKG_CONFIG} --exists libmfx
+      RESULT_VARIABLE _rv_libmfx_rc
+    )
+    IF(_rv_libmfx_rc EQUAL 0)
+      LIST(APPEND RV_FFMPEG_EXTERNAL_LIBS "--enable-libmfx")
+      MESSAGE(STATUS "FFmpeg QSV enabled via libmfx")
+    ENDIF()
+  ENDIF()
+ENDIF()
+
+SET(_rv_ffmpeg_configure_flags
+    ${RV_FFMPEG_COMMON_CONFIG_OPTIONS} ${RV_FFMPEG_CONFIG_OPTIONS} ${RV_FFMPEG_EXTERNAL_LIBS}
+)
+FOREACH(
+  _rv_ffmpeg_flag IN
+  LISTS _rv_ffmpeg_configure_flags
+)
+  IF("${_rv_ffmpeg_flag}" MATCHES "--enable-gpl|--enable-nonfree|--enable-libx264|--enable-libx265")
+    MESSAGE(FATAL_ERROR "Refusing FFmpeg configure flag ${_rv_ffmpeg_flag}")
+  ENDIF()
+ENDFOREACH()
 
 # On macOS, externally-provided shared libraries may use @rpath install names. FFmpeg's configure compiles and RUNS small test binaries linked against these
 # libs; without an LC_RPATH in the test binary, dyld can't locate them at runtime (SIGABRT / Abort trap: 6). DYLD_LIBRARY_PATH cannot be used because macOS dyld
@@ -343,6 +390,12 @@ SET(_ffmpeg_extra_pkgconfig_dirs
 IF(RV_CONAN_CMAKE_PREFIX_PATH)
   LIST(APPEND _ffmpeg_extra_pkgconfig_dirs "${RV_CONAN_CMAKE_PREFIX_PATH}")
 ENDIF()
+IF(RV_BSD_CODEC_PKGCONFIG_DIRS)
+  LIST(APPEND _ffmpeg_extra_pkgconfig_dirs ${RV_BSD_CODEC_PKGCONFIG_DIRS})
+ENDIF()
+IF(RV_HW_ENCODE_PKGCONFIG_DIRS)
+  LIST(APPEND _ffmpeg_extra_pkgconfig_dirs ${RV_HW_ENCODE_PKGCONFIG_DIRS})
+ENDIF()
 RV_BUILD_PKG_CONFIG_PATH(_ffmpeg_pkg_config_path EXTRA_DIRS ${_ffmpeg_extra_pkgconfig_dirs})
 
 # PKG_CONFIG_PATH is explicitly cleared (set to empty) in the configure environment below. pkg-config searches PKG_CONFIG_PATH *before* PKG_CONFIG_LIBDIR; if
@@ -367,7 +420,6 @@ EXTERNALPROJECT_ADD(
   BUILD_COMMAND ${_make_command} -j${_cpu_count}
   INSTALL_COMMAND ${_make_command} install
   BUILD_IN_SOURCE TRUE
-  BUILD_ALWAYS ${_force_rebuild}
   BUILD_BYPRODUCTS ${_build_byproducts}
   USES_TERMINAL_BUILD TRUE
 )

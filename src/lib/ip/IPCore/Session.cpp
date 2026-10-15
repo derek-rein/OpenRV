@@ -22,6 +22,7 @@
 #include <IPCore/NodeManager.h>
 #include <IPCore/FBCache.h>
 #include <TwkApp/Event.h>
+#include <TwkGLF/GLContextScope.h>
 #include <TwkContainer/GTOReader.h>
 #include <TwkContainer/GTOWriter.h>
 #include <TwkContainer/PropertyContainer.h>
@@ -741,7 +742,7 @@ namespace IPCore
             else if (name == "threads")
                 stl_ext::thread_group::debug_all(true);
             else if (name == "gpu")
-                ImageRenderer::reportGL(true);
+                ImageRenderer::debugGpu(true);
             else if (name == "audio")
                 AudioRenderer::setDebug(true);
             else if (name == "audioverbose")
@@ -1144,6 +1145,11 @@ namespace IPCore
 
     void Session::clearVideoDeviceCaches()
     {
+        //
+        //  Runs from RenderContextChangeEvent and shutdown, outside a render.
+        //
+        const TwkGLF::GLContextScope contextScope(dynamic_cast<const TwkGLF::GLVideoDevice*>(m_controlVideoDevice));
+
         if (m_controlVideoDevice)
             m_controlVideoDevice->clearCaches();
         if (m_outputVideoDevice)
@@ -1156,6 +1162,11 @@ namespace IPCore
     {
         if (d == m_outputVideoDevice || d == m_controlVideoDevice)
         {
+            //
+            //  Arrives from a resize, outside a render.
+            //
+            const TwkGLF::GLContextScope contextScope(dynamic_cast<const TwkGLF::GLVideoDevice*>(d));
+
             m_renderer->flushImageFBOs();
         }
 
@@ -2261,20 +2272,18 @@ namespace IPCore
     void Session::askForRedraw(bool force)
     {
         if (m_beingDeleted)
+        {
             return;
+        }
 
         m_wantsRedraw = true;
 
-        if (!isPlaying())
-        {
-            if (!m_stopTimer.isRunning())
-            {
-                m_stopTimer.stop();
-                m_stopTimer.start();
-                App()->startPlay(this);
-                send(startPlayMessage());
-            }
-        }
+        //
+        //  Non-playback redraws only need a single frame update via d->redraw()
+        //  below. Starting the 2s m_stopTimer/startPlay settle window kept
+        //  isUpdating() true and starved Qt6 QWebChannel delivery during spam
+        //  clicks, without providing further redraw work once wantsRedraw clears.
+        //
 
         if (!isRendering() || force)
         {
@@ -3223,7 +3232,24 @@ namespace IPCore
         //  This is the "heartbeat" entry point in the session
         //
 
-        if (force || isUpdating() || m_rangeDirty)
+        if (m_stopTimer.isRunning() && !isPlaying())
+        {
+            if (!m_wantsRedraw && !isEvalRunning() && !isBuffering() && !currentStateIsError())
+            {
+                stopCompletely();
+            }
+            else if (m_stopTimer.elapsed() > 2.0 && !isEvalRunning() && !isBuffering() && !currentStateIsError())
+            {
+                stopCompletely();
+            }
+        }
+
+        //
+        //  During non-playback settle, only redraw when something actually
+        //  requested it. The old isUpdating() guard repainted at heartbeat
+        //  rate for ~2s even with wantsRedraw=false, starving Qt6 QWebChannel.
+        //
+        if (force || isPlaying() || m_wantsRedraw || m_rangeDirty)
         {
             if (multipleVideoDevices() && outputVideoDevice()->willBlockOnTransfer()
                 && (outputVideoDevice()->capabilities() & TwkApp::VideoDevice::ASyncReadBack))
@@ -4786,7 +4812,7 @@ namespace IPCore
 
     void Session::userRender(const VideoDevice* d, const char* eventName, const string& contents)
     {
-        if (ImageRenderer::reportGL())
+        if (ImageRenderer::debugGpu())
         {
             // these calls are expensive should only be called in debug mode
 
@@ -4810,7 +4836,7 @@ namespace IPCore
 
         m_currentSession = s;
 
-        if (ImageRenderer::reportGL())
+        if (ImageRenderer::debugGpu())
         {
             if (GLuint err = glGetError())
             {

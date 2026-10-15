@@ -26,6 +26,12 @@ inputs:
     required: false
     # Cache prebuilt Qt from aqt (jurplel/install-qt-action). Huge win vs re-download.
     default: 'true'
+  braw-sdk-read-token:
+    required: false
+    default: ''
+  r3d-sdk-read-token:
+    required: false
+    default: ''
 
 runs:
   using: "composite"
@@ -70,7 +76,7 @@ runs:
           if dnf install -y epel-release && \
              dnf config-manager --set-enabled ${{ inputs.extra_repo }} devel && \
              dnf groupinstall "Development Tools" -y && \
-             dnf install -y alsa-lib-devel autoconf automake avahi-compat-libdns_sd-devel bison bzip2-devel cmake-gui curl-devel flex gcc gcc-c++ git libXcomposite libXi-devel libaio-devel libffi-devel nasm ncurses-devel nss libtool libxkbcommon libXcomposite libXdamage libXrandr libXtst libXcursor meson openssl-devel patch pulseaudio-libs pulseaudio-libs-glib2 ocl-icd ocl-icd-devel opencl-headers qt5-qtbase-devel readline-devel sqlite-devel systemd-devel tcl-devel tcsh tk-devel yasm zip zlib-devel wget patchelf pcsc-lite libxkbfile perl-IPC-Cmd perl-Time-Piece && \
+             dnf install -y alsa-lib-devel autoconf automake avahi-compat-libdns_sd-devel bison bzip2-devel cmake-gui curl-devel flex freetype-devel gcc gcc-c++ git libXcomposite libXi-devel libaio-devel libffi-devel libuuid-devel nasm ncurses-devel nss libtool libxkbcommon libXcomposite libXdamage libXrandr libXtst libXcursor meson openssl-devel patch pkgconf-pkg-config pulseaudio-libs pulseaudio-libs-glib2 ocl-icd ocl-icd-devel opencl-headers qt5-qtbase-devel readline-devel sqlite-devel systemd-devel tcl-devel tcsh tk-devel yasm zip zlib-devel wget patchelf pcsc-lite libxkbfile perl-IPC-Cmd perl-Time-Piece && \
              dnf install -y libX11-devel libXext-devel libXrender-devel libXrandr-devel libXcursor-devel libXi-devel libXxf86vm-devel libxkbcommon-devel && \
              dnf install -y xz-devel mesa-libGLU mesa-libGLU-devel && \
              if [ "${{ inputs.rocky-version }}" = "9" ]; then \
@@ -94,6 +100,10 @@ runs:
           echo "Failed to install dependencies after $max_retries attempts"
           exit 1
         fi
+      shell: bash
+
+    - name: Install optional VAAPI headers
+      run: dnf install -y libva-devel libdrm-devel || echo "VAAPI headers not available; FFmpeg will leave VAAPI off"
       shell: bash
 
     - name: Install other system dependencies
@@ -244,28 +254,32 @@ runs:
         cargo --version
       shell: bash
 
-    # For Rocky Linux, we can't cache the dependencies of Open RV
-    # because there is not enough room in the cache (10GB limit) for all platforms.
-    # ccache is used for this run only (not stored in Actions cache) to speed up the build.
-    # Let's revisit this if we can reduce the size of the cache (potentially dropping x86_64 for Mac)
-    # or by moving some dependencies from the cache to Conan or another dependency manager.
+    # Third-party source trees are too large to cache on every platform (10GB
+    # Actions limit, shared with the Qt cache). Persist a modest ccache of the
+    # compiler output so a dispatch of the same platform reuses object files.
     - name: Install ccache
       run: dnf install -y ccache
       shell: bash
 
-    # Uncomment to persist ccache in Actions cache (uses repo 10GB limit).
-    # - name: Setup ccache
-    #   uses: hendrikmuhs/ccache-action@5ebbd400eff9e74630f759d94ddd7b6c26299639
-    #   with:
-    #     key: rocky-${{ inputs.rocky-version }}-${{ inputs.vfx-platform }}-${{ inputs.build-type }}
-    #     max-size: 2G
-    #     verbose: 2
+    - name: Setup ccache
+      uses: hendrikmuhs/ccache-action@5ebbd400eff9e74630f759d94ddd7b6c26299639
+      with:
+        key: rocky-${{ inputs.rocky-version }}-${{ inputs.vfx-platform }}-${{ inputs.build-type }}-codecs
+        max-size: 500M
+        verbose: 2
+
+    - name: Fetch optional playback SDKs
+      shell: bash
+      env:
+        BRAW_SDK_READ_TOKEN: ${{ inputs.braw-sdk-read-token }}
+        R3D_SDK_READ_TOKEN: ${{ inputs.r3d-sdk-read-token }}
+      run: bash scripts/sdk/fetch_optional_sdks.sh
 
     - name: Configure OpenRV
       run: |
         cmake --version
         export QT_HOME=/__w/OpenRV/OpenRV/deps/Qt/${{ inputs.qt-version}}/gcc_64
-        cmake -B _build -G "Ninja" -DCMAKE_BUILD_TYPE=${{ inputs.build-type }} -DRV_DEPS_QT_LOCATION=$QT_HOME -DRV_VFX_PLATFORM=${{ inputs.vfx-platform }}
+        cmake -B _build -G "Ninja" -DCMAKE_BUILD_TYPE=${{ inputs.build-type }} -DRV_DEPS_QT_LOCATION=$QT_HOME -DRV_VFX_PLATFORM=${{ inputs.vfx-platform }} -DRV_ENABLE_ALL_CODECS=ON
       shell: bash
 
     - name: Build OpenRV dependencies

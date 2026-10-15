@@ -86,20 +86,34 @@ def get_dependencies_info(versions, app_name, platform=""):
         ("Expat", get_version("expat"), "MIT License"),
         ("FFmpeg", get_version("FFmpeg"), "LGPL v2.1+"),
         ("GLEW", get_version("GLEW"), "Modified BSD / MIT"),
-        ("libjpeg-turbo", get_version("jpegturbo"), "BSD-style"),
-        ("libpng", get_version("png"), "libpng License"),
-        ("LibRaw", get_version("raw"), "LGPL v2.1 / CDDL"),
-        ("libtiff", get_version("tiff"), "libtiff License"),
-        ("libwebp", get_version("webp"), "BSD 3-Clause"),
-        ("nanobind", get_version("nanobind"), "BSD 3-Clause"),
-        ("OpenJPEG", get_version("openjpeg"), "BSD 2-Clause"),
-        ("OpenJPH", get_version("openjph"), "BSD 2-Clause"),
-        ("OpenSSL", get_version("OpenSSL"), "Apache License 2.0"),
-        ("PCRE2", get_version("pcre2"), "BSD License"),
-        ("spdlog", get_version("spdlog"), "MIT License"),
-        ("yaml-cpp", get_version("yaml-cpp"), "MIT License"),
-        ("zlib", get_version("zlib"), "zlib License"),
     ]
+    libaom_version = versions.get("libaom")
+    if libaom_version:
+        other_deps.append(("libaom", libaom_version, "BSD 2-Clause"))
+    other_deps.extend(
+        [
+            ("libjpeg-turbo", get_version("jpegturbo"), "BSD-style"),
+            ("libpng", get_version("png"), "libpng License"),
+            ("LibRaw", get_version("raw"), "LGPL v2.1 / CDDL"),
+            ("libtiff", get_version("tiff"), "libtiff License"),
+        ]
+    )
+    libvpx_version = versions.get("libvpx")
+    if libvpx_version:
+        other_deps.append(("libvpx", libvpx_version, "BSD"))
+    other_deps.extend(
+        [
+            ("libwebp", get_version("webp"), "BSD 3-Clause"),
+            ("nanobind", get_version("nanobind"), "BSD 3-Clause"),
+            ("OpenJPEG", get_version("openjpeg"), "BSD 2-Clause"),
+            ("OpenJPH", get_version("openjph"), "BSD 2-Clause"),
+            ("OpenSSL", get_version("OpenSSL"), "Apache License 2.0"),
+            ("PCRE2", get_version("pcre2"), "BSD License"),
+            ("spdlog", get_version("spdlog"), "MIT License"),
+            ("yaml-cpp", get_version("yaml-cpp"), "MIT License"),
+            ("zlib", get_version("zlib"), "zlib License"),
+        ]
+    )
 
     return vfx_deps, other_deps, rv_specific_deps
 
