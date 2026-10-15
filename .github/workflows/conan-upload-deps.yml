@@ -39,11 +39,6 @@ name: Conan Upload Deps
 # pcre2 is windows_only and is only present in the Windows matrix.
 
 on:
-  pull_request:
-    paths:
-      - 'conan/**'
-      - '.github/workflows/conan-upload-deps.yml'
-
   workflow_dispatch:
     inputs:
       remote:
