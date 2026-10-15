@@ -68,7 +68,7 @@ runs:
       shell: bash
 
     - name: Resolve build job count
-      # macos-14 GHA runners are typically 3 cores with limited RAM. Prior release
+      # macos-15 (arm64) GHA runners are typically 3 cores with limited RAM. Prior release
       # run died with: "The hosted runner lost communication with the server"
       # during MuQt6 compile (OOM / agent heartbeat starvation). Cap jobs at 2
       # and never use cmake --build -v (log flood kills the runner agent).
@@ -124,6 +124,13 @@ runs:
     - name: Install Homebrew dependencies
       # icu4c is needed for Qt UIC executable / AUTOUIC.
       # Might be to find another way to install icu4c if the icu4c recipe disappear.
+      # Do not upgrade formulae the runner image already ships (that pulls in
+      # source builds when bottles lag) and skip the auto-update / dependents check.
+      env:
+        HOMEBREW_NO_AUTO_UPDATE: '1'
+        HOMEBREW_NO_INSTALL_UPGRADE: '1'
+        HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: '1'
+        HOMEBREW_NO_INSTALL_CLEANUP: '1'
       run: |
         retry_count=0
         max_retries=5

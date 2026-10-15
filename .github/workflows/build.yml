@@ -204,7 +204,7 @@ jobs:
       inputs.platforms == 'all' ||
       inputs.platforms == 'macos'
     name: 'macOS ARM64 CY2025 Release'
-    runs-on: macos-14
+    runs-on: macos-15
     # The compile can take a few hours. Notarization is submitted and then
     # left for notarize-finish.yml, so this window is only for the build
     # (unless wait_for_notarization is turned on). 360 is the hosted cap.
