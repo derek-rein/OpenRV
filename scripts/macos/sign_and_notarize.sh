@@ -163,8 +163,22 @@ sign_one() {
 # Deepest path first so nested plugins are signed before their parent bundle.
 sign_inside_out() {
   local app_path="$1"
-  local list path use_ent
+  local list path use_ent inplace
   list=$(mktemp)
+
+  # 1. Get every non-Mach-O regular file out of Contents/MacOS, PlugIns and
+  #    Frameworks (moved to Contents/Resources + symlink). The few that must
+  #    stay (scripts RV executes next to its binary) are signed in place here,
+  #    before any Mach-O or bundle, so the parent seals see them signed.
+  inplace=$(mktemp)
+  python3 "${SCRIPT_DIR}/relocate_nonmacho.py" "${app_path}" >"${inplace}"
+  while IFS= read -r -d '' path; do
+    log "codesign non-Mach-O in place ${path}"
+    sign_one "${path}" "no"
+  done <"${inplace}"
+  rm -f "${inplace}"
+
+  # 2. Mach-O files, deepest path first. Never --deep.
 
   find "${app_path}" -type f ! -path '*.dSYM/*' -print0 |
     python3 -c '
@@ -178,14 +192,6 @@ if paths:
 
   while IFS= read -r -d '' path; do
     if ! is_macho "${path}"; then
-      # Non-Mach-O code in Contents/MacOS (e.g. crashpad_handler_macos.sh) is a
-      # subcomponent of the main executable and must carry its own signature.
-      case "${path}" in
-        */Contents/MacOS/*)
-          log "codesign script ${path}"
-          sign_one "${path}" "no"
-          ;;
-      esac
       continue
     fi
     use_ent="no"
@@ -218,7 +224,26 @@ if paths:
 
   log "codesign app ${app_path}"
   sign_one "${app_path}" "yes"
+  verify_app "${app_path}"
+}
+
+# Fail here, before the DMG and notarytool, if anything is unsealed.
+verify_app() {
+  local app_path="$1" out
+  log "codesign --verify --deep --strict ${app_path}"
   codesign --verify --deep --strict --verbose=2 "${app_path}"
+  log "spctl --assess --type execute ${app_path}"
+  out=$(spctl --assess --type execute --verbose=4 "${app_path}" 2>&1 || true)
+  log "${out}"
+  # Before notarization Gatekeeper reports "Unnotarized Developer ID"; that is
+  # expected here. Anything else (bad signature, wrong identity) is fatal.
+  case "${out}" in
+    *": accepted"* | *"Unnotarized Developer ID"*) ;;
+    *)
+      log "ERROR: spctl rejected ${app_path} for a reason other than missing notarization"
+      exit 1
+      ;;
+  esac
 }
 
 import_certificate() {

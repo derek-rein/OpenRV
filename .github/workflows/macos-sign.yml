@@ -1,0 +1,97 @@
+# Sign-only retry for macOS. Downloads the unsigned RV.app archive that
+# Multi-platform Build uploads (artifact openrv-macos-arm64-unsigned) and runs
+# only sign + DMG + notarytool submit, then queues notarize-finish.yml.
+# Use it when a build compiled fine but signing failed, instead of rebuilding.
+
+name: macOS Sign Only
+
+on:
+  workflow_dispatch:
+    inputs:
+      sign_from_run_id:
+        description: 'Multi-platform Build run id whose openrv-macos-arm64-unsigned artifact to sign'
+        required: true
+        type: string
+
+concurrency:
+  group: macos-sign-${{ inputs.sign_from_run_id }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  actions: write
+
+env:
+  ARTIFACT_MACOS: openrv-macos-arm64
+
+jobs:
+  sign:
+    name: 'macOS ARM64 sign + notarize submit'
+    runs-on: macos-15
+    timeout-minutes: 120
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+
+      - name: Download unsigned RV.app
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.ARTIFACT_MACOS }}-unsigned
+          run-id: ${{ inputs.sign_from_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: unsigned
+
+      - name: Extract
+        shell: bash
+        run: |
+          mkdir -p _install
+          tar -xzf "unsigned/${{ env.ARTIFACT_MACOS }}-unsigned.tar.gz" -C _install
+          ls _install
+
+      - name: Sign, build DMG, and submit for notarization
+        shell: bash
+        env:
+          MACOS_CERT_P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+          MACOS_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_API_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
+          DMG_NAME: ${{ env.ARTIFACT_MACOS }}.dmg
+          WAIT_FOR_NOTARIZATION: 'false'
+        run: |
+          chmod +x scripts/macos/sign_and_notarize.sh
+          scripts/macos/sign_and_notarize.sh "${GITHUB_WORKSPACE}/_install" "${GITHUB_WORKSPACE}/dist"
+          tar -czf "${{ env.ARTIFACT_MACOS }}.tar.gz" -C _install .
+          ls -lh "dist/${{ env.ARTIFACT_MACOS }}.dmg" "${{ env.ARTIFACT_MACOS }}.tar.gz" dist/notarize-pending.json || true
+
+      - name: Upload macOS ARM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ARTIFACT_MACOS }}
+          path: |
+            dist/${{ env.ARTIFACT_MACOS }}.dmg
+            ${{ env.ARTIFACT_MACOS }}.tar.gz
+            dist/notarize-pending.json
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Queue notarization for the Ubuntu finisher
+        if: hashFiles('dist/notarize-pending.json') != ''
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash scripts/macos/publish_notarize_queue.sh dist/notarize-pending.json
+
+      - name: Start the Ubuntu notarization finisher
+        if: hashFiles('dist/notarize-pending.json') != ''
+        continue-on-error: true
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh workflow run notarize-finish.yml --repo "$GITHUB_REPOSITORY" \
+            --ref "${{ github.event.repository.default_branch }}" \
+            -f run_id="${{ github.run_id }}" -f wait_minutes=150 \
+            || echo "::warning::Could not dispatch notarize-finish.yml; run it manually to staple."

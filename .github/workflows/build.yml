@@ -238,6 +238,24 @@ jobs:
           braw-sdk-read-token: ${{ secrets.BRAW_SDK_READ_TOKEN }}
           r3d-sdk-read-token: ${{ secrets.R3D_SDK_READ_TOKEN }}
 
+      # Unsigned app first, so a signing failure can be retried with
+      # macos-sign.yml (sign_from_run_id) instead of a multi-hour rebuild.
+      # tar keeps the framework symlinks that upload-artifact would flatten.
+      - name: Archive unsigned RV.app
+        shell: bash
+        run: |
+          tar -czf "${{ env.ARTIFACT_MACOS }}-unsigned.tar.gz" -C _install .
+          ls -lh "${{ env.ARTIFACT_MACOS }}-unsigned.tar.gz"
+
+      - name: Upload unsigned RV.app
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ARTIFACT_MACOS }}-unsigned
+          path: ${{ env.ARTIFACT_MACOS }}-unsigned.tar.gz
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Sign, build DMG, and submit for notarization
         shell: bash
         env:
