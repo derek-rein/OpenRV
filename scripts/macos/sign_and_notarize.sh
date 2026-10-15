@@ -178,6 +178,14 @@ if paths:
 
   while IFS= read -r -d '' path; do
     if ! is_macho "${path}"; then
+      # Non-Mach-O code in Contents/MacOS (e.g. crashpad_handler_macos.sh) is a
+      # subcomponent of the main executable and must carry its own signature.
+      case "${path}" in
+        */Contents/MacOS/*)
+          log "codesign script ${path}"
+          sign_one "${path}" "no"
+          ;;
+      esac
       continue
     fi
     use_ent="no"
