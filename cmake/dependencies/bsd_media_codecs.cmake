@@ -174,9 +174,12 @@ SET_PROPERTY(
   GLOBAL APPEND
   PROPERTY "RV_FFMPEG_DEPENDS" RV_DEPS_LIBVPX RV_DEPS_LIBAOM
 )
+# libaom is built with CONFIG_AV1_DECODER=0, so aom/aom_decoder.h and aomdx.h are not installed.
+# FFmpeg's libaom_av1 decoder wrapper (libaomdec.c) needs them, so disable it; dav1d decodes AV1.
 SET_PROPERTY(
   GLOBAL APPEND
-  PROPERTY "RV_FFMPEG_EXTERNAL_LIBS" "--enable-libvpx" "--enable-libaom" "--pkg-config-flags=--static"
+  PROPERTY "RV_FFMPEG_EXTERNAL_LIBS" "--enable-libvpx" "--enable-libaom" "--disable-decoder=libaom_av1"
+           "--pkg-config-flags=--static"
 )
 
 MESSAGE(STATUS "BSD FFmpeg encoders: libvpx ${_vpx_version}, libaom ${_aom_version}")
