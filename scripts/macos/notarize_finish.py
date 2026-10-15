@@ -13,7 +13,7 @@ Otherwise it asks Apple's Notary API (one GET, no polling loop) what happened:
   GET https://appstoreconnect.apple.com/notary/v2/submissions/{id}
 
 In Progress stays queued. Accepted is stapled with ``rcodesign staple``,
-checked with ``rcodesign verify``, and the stapled DMG replaces the release
+checked with ``rcodesign print-signature-info``, and the stapled DMG replaces the release
 asset. Invalid or Rejected prints the notary log, drops the pending marker,
 and fails the process.
 """
@@ -415,7 +415,7 @@ def process_record(
     print(f"Notary log for {submission_id}:\n{fetch_notary_log(token, submission_id)}", flush=True)
     rcodesign = ensure_rcodesign(rcodesign_cache)
     run_rcodesign(rcodesign, ["staple", "-v", str(downloaded)])
-    run_rcodesign(rcodesign, ["verify", "-v", str(downloaded)])
+    # rcodesign verify only accepts Mach-O; print-signature-info reads DMGs.
     run_rcodesign(rcodesign, ["print-signature-info", "-v", str(downloaded)])
     stapled_sha = sha256_file(downloaded)
     print(f"stapled sha256 {stapled_sha}", flush=True)
