@@ -4,18 +4,18 @@
 # are assets on the draft release tag `notarize-queue`. This workflow looks at
 # that list and returns without calling Apple when it is empty.
 #
-# Schedule is every 15 minutes. GitHub only runs the cron from the default
-# branch, after this file is merged. workflow_dispatch can target one
-# submission id or the GitHub Actions run that submitted it.
-#
-# A delayed dispatch from the macOS job is not available, so the schedule is
-# what picks the submission up.
+# Multi-platform Build dispatches this workflow right after it queues a
+# submission. One Ubuntu run then polls Apple every few minutes (up to
+# wait_minutes) until the queue is empty, instead of a cron every 15 minutes.
+# A cron every 6 hours stays as a safety net for anything left behind; with an
+# empty queue it exits in well under a minute. GitHub only runs the cron from
+# the default branch.
 
 name: Notarize finish
 
 on:
   schedule:
-    - cron: '*/15 * * * *'
+    - cron: '23 */6 * * *'
   workflow_dispatch:
     inputs:
       submission_id:
@@ -28,6 +28,11 @@ on:
         required: false
         type: string
         default: ''
+      wait_minutes:
+        description: 'Keep polling Apple for up to this many minutes while submissions are pending (0 = one pass)'
+        required: false
+        type: string
+        default: '150'
 
 concurrency:
   group: notarize-finish
@@ -40,7 +45,7 @@ jobs:
   finish:
     name: Staple accepted DMGs
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 180
     steps:
       - name: Check out repository code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -56,9 +61,23 @@ jobs:
           ASC_API_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
           NOTARIZE_SUBMISSION_ID: ${{ github.event_name == 'workflow_dispatch' && inputs.submission_id || '' }}
           NOTARIZE_RUN_ID: ${{ github.event_name == 'workflow_dispatch' && inputs.run_id || '' }}
+          WAIT_MINUTES: ${{ github.event_name == 'workflow_dispatch' && inputs.wait_minutes || '0' }}
+          POLL_SECONDS: '300'
         run: |
           mkdir -p notarize-out
-          python3 scripts/macos/notarize_finish.py finish
+          deadline=$(( $(date +%s) + ${WAIT_MINUTES:-0} * 60 ))
+          while :; do
+            rc=0
+            python3 scripts/macos/notarize_finish.py finish || rc=$?
+            pending=$(gh release view "${NOTARIZE_QUEUE_TAG:-notarize-queue}" --repo "$GITHUB_REPOSITORY" --json assets \
+              --jq '[.assets[].name | select(startswith("pending-") and endswith(".json"))] | length' 2>/dev/null || echo 0)
+            if [ "$pending" = "0" ] || [ "$(date +%s)" -ge "$deadline" ]; then
+              echo "pending markers left: $pending"
+              exit $rc
+            fi
+            echo "$pending submission(s) still pending; next check in ${POLL_SECONDS}s"
+            sleep "$POLL_SECONDS"
+          done
 
       - name: Upload stapled DMGs
         if: always()
