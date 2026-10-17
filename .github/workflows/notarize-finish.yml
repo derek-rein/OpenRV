@@ -61,17 +61,26 @@ jobs:
           POLL_SECONDS: '300'
         run: |
           mkdir -p notarize-out
+          # notarize_finish.py exit codes: 0 = done, 75 = only "In Progress"
+          # submissions left (keep polling), anything else = hard error
+          # (Invalid/Rejected, staple failure, API/auth error): stop and fail.
           deadline=$(( $(date +%s) + ${WAIT_MINUTES:-0} * 60 ))
           while :; do
             rc=0
             python3 scripts/macos/notarize_finish.py finish || rc=$?
-            pending=$(gh release view "${NOTARIZE_QUEUE_TAG:-notarize-queue}" --repo "$GITHUB_REPOSITORY" --json assets \
-              --jq '[.assets[].name | select(startswith("pending-") and endswith(".json"))] | length' 2>/dev/null || echo 0)
-            if [ "$pending" = "0" ] || [ "$(date +%s)" -ge "$deadline" ]; then
-              echo "pending markers left: $pending"
-              exit $rc
+            if [ "$rc" = "0" ]; then
+              echo "nothing left to wait for"
+              exit 0
             fi
-            echo "$pending submission(s) still pending; next check in ${POLL_SECONDS}s"
+            if [ "$rc" != "75" ]; then
+              echo "::error::notarize_finish.py hit a hard error (exit $rc); not polling again"
+              exit "$rc"
+            fi
+            if [ "$(date +%s)" -ge "$deadline" ]; then
+              echo "submission(s) still In Progress after ${WAIT_MINUTES:-0} minute(s); re-run this workflow later"
+              exit 0
+            fi
+            echo "submission(s) still In Progress; next check in ${POLL_SECONDS}s"
             sleep "$POLL_SECONDS"
           done
 

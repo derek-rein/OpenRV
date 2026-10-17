@@ -12,10 +12,15 @@ Otherwise it asks Apple's Notary API (one GET, no polling loop) what happened:
 
   GET https://appstoreconnect.apple.com/notary/v2/submissions/{id}
 
-In Progress stays queued. Accepted is stapled with ``rcodesign staple``,
+Only In Progress stays queued. Accepted is stapled with ``rcodesign staple``,
 checked with ``rcodesign print-signature-info``, and the stapled DMG replaces the release
 asset. Invalid or Rejected prints the notary log, drops the pending marker,
 and fails the process.
+
+Exit codes for ``finish``: 0 = nothing left to wait for, 75 (EXIT_PENDING) =
+only In Progress submissions remain (the workflow keeps polling), anything else
+= hard error (rejection, staple failure, API/auth error, unknown status); the
+workflow stops polling and fails immediately.
 """
 
 from __future__ import annotations
@@ -35,6 +40,8 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+EXIT_PENDING = 75
+
 QUEUE_TAG = os.environ.get("NOTARIZE_QUEUE_TAG", "notarize-queue")
 NOTARY_API = "https://appstoreconnect.apple.com/notary/v2/submissions"
 RCODESIGN_VERSION = "0.29.0"
@@ -47,13 +54,18 @@ RCODESIGN_URL = (
 
 
 def classify_status(status: str) -> str:
-    """Map an Apple notary status onto accepted, rejected, or pending."""
+    """Map an Apple notary status onto accepted, rejected, pending, or unknown.
+
+    Only "In Progress" is pending; anything unrecognised is a hard error.
+    """
     normalized = status.strip().lower()
     if normalized == "accepted":
         return "accepted"
     if normalized in {"invalid", "rejected"}:
         return "rejected"
-    return "pending"
+    if normalized == "in progress":
+        return "pending"
+    return "unknown"
 
 
 def sha256_file(path: Path) -> str:
@@ -375,8 +387,13 @@ def process_record(
     if kind == "pending":
         print(f"submission {submission_id} still {status}; leaving the queue marker", flush=True)
         return "pending"
+    if kind == "unknown":
+        raise RuntimeError(f"unexpected Apple notary status {status!r} for {submission_id}")
     if kind == "rejected":
-        log_text = fetch_notary_log(token, submission_id)
+        try:
+            log_text = fetch_notary_log(token, submission_id)
+        except (RuntimeError, urllib.error.URLError, OSError, ValueError) as exc:
+            log_text = f"(could not fetch the notary log: {exc})"
         print(f"Notary log for {submission_id} ({status}):\n{log_text}", flush=True)
         log_path = output_dir / f"failed-{submission_id}.log"
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -455,6 +472,7 @@ def cmd_finish() -> int:
     token = apple_jwt(os.environ["ASC_API_KEY_P8"], os.environ["ASC_KEY_ID"], os.environ["ASC_ISSUER_ID"])
     cache = Path(os.environ.get("RCODESIGN_CACHE", str(output_dir / ".rcodesign")))
     failures = 0
+    pending = 0
     # Refresh the asset list per item so a delete sees ids from the latest view.
     for record in selected:
         submission_id = str(record.get("submission_id"))
@@ -466,8 +484,13 @@ def cmd_finish() -> int:
             failures += 1
             continue
         if outcome == "rejected":
+            print(f"ERROR submission {submission_id} was rejected by Apple", file=sys.stderr)
             failures += 1
-    return 1 if failures else 0
+        elif outcome == "pending":
+            pending += 1
+    if failures:
+        return 1
+    return EXIT_PENDING if pending else 0
 
 
 def cmd_write_record(argv: list[str]) -> int:
@@ -546,7 +569,9 @@ def cmd_self_check() -> int:
         "Invalid": "rejected",
         "Rejected": "rejected",
         "In Progress": "pending",
-        "": "pending",
+        "in progress": "pending",
+        "": "unknown",
+        "Bogus": "unknown",
     }
     for status, expected in samples.items():
         got = classify_status(status)
